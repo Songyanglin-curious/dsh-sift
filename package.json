@@ -1,0 +1,70 @@
+{
+  "name": "@songyanglin/dsh-sift",
+  "description": "由 AI 协作的个人学习型知识梳理工作台",
+  "version": "0.1.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "main": "dist/host/index.js",
+  "types": "dist/types/host/index.d.ts",
+  "exports": {
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./client": "./dist/client/index.js",
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/types/host/index.d.ts",
+      "default": "./dist/host/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "keywords": [
+    "dsh-plugin",
+    "knowledge-workbench"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check": "tsc --noEmit",
+    "dev": "node scripts/dev.mjs start",
+    "dev:clean": "node scripts/dev.mjs clean",
+    "dev:setup": "node scripts/dev.mjs setup",
+    "dev:status": "node scripts/dev.mjs status",
+    "prepack": "pnpm check && pnpm test && pnpm build",
+    "test": "vitest run",
+    "verify:package": "node scripts/verify-package.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ],
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "4.0.2"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.2",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "esbuild": "^0.25.0",
+    "js-yaml": "^4.1.0",
+    "react": "^19.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "packageManager": "pnpm@11.25.0"
+}

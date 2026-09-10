@@ -73,4 +73,40 @@ Sift 将以 DSH 插件的形式实现，利用其 AI 能力和 Web 可视化基�
 
 ## 当前状态
 
-项目处于目标确认和初期设计阶段，功能、数据结构与交互细节仍在探索中。
+项目已经建立最小 DSH 插件与本地开发骨架，功能、数据结构与交互细节仍在探索中。当前界面只显示一个用于确认 Client 加载和热更新的 `Sift` 占位标记，不包含知识工作台业务能力。
+
+## 本地开发
+
+当前开发环境要求：
+
+- DSH `0.1.2-rc.1`
+- Node.js 24 或更高版本
+- pnpm `11.25.0`
+
+安装依赖并执行静态验证：
+
+```powershell
+pnpm install
+pnpm check
+pnpm test
+pnpm build
+```
+
+日常开发使用仓库内独立的 `.debug/development` 作为 `DSH_HOME`，通过 `link:` 加载当前源码，不修改正式 DSH Home 或 Profile：
+
+```powershell
+pnpm dev:setup
+pnpm dev
+pnpm dev:status
+pnpm dev:clean
+```
+
+开发 Web 默认地址为 `http://127.0.0.1:9082`。可以通过 `SIFT_DEV_PORT` 修改端口；如果无法自动定位 DSH，可以通过 `SIFT_DSH_ENTRY` 指向 DSH 的 `lib/bin.js`。
+
+开发期间，Client 修改会重新构建并交给 DSH Client HMR；Host、Bundle patch 或依赖修改会触发受控重启。
+
+发布前使用隔离环境验证 tarball 的打包、安装、组合配置、文件完整性和卸载：
+
+```powershell
+pnpm verify:package
+```
