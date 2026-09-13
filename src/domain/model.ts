@@ -6,6 +6,7 @@ export interface Solution {
   id: string;
   name: string;
   description: string;
+  workspaceId: string | null;
   workspacePath: string | null;
   createdAt: string;
   updatedAt: string;
@@ -91,6 +92,7 @@ export interface ProjectWorkState {
   materialWidth: number;
   conversationWidth: number;
   materialTreeCollapsed: boolean;
+  pendingNavigation?: { annotationId: string; requestedAt: string } | null;
   updatedAt: string;
 }
 
@@ -137,6 +139,13 @@ export interface BinaryDocument {
   version: string;
   status: SourceStatus;
   contentBase64: string;
+}
+
+export interface HostFileListing {
+  path: string;
+  parent: string | null;
+  entries: Array<{ name: string; path: string; kind: 'directory' | 'file' }>;
+  truncated: boolean;
 }
 
 export const emptyCatalog = (): Catalog => ({

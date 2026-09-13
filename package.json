@@ -47,7 +47,9 @@
     "client": {
       "inject": [
         "@deepseek-ai/dsh-api-remotes",
-        "@deepseek-ai/dsh-client-ui-conversation"
+        "@deepseek-ai/dsh-api-workspace-controller",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-layout"
       ],
       "platform": "web"
     }
@@ -58,7 +60,7 @@
   },
   "dependencies": {
     "@codemirror/lang-markdown": "6.5.0",
-    "@codemirror/state": "6.5.2",
+    "@codemirror/state": "6.7.4",
     "@codemirror/view": "6.43.11",
     "@milkdown/crepe": "7.22.1",
     "@milkdown/kit": "7.22.1",

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { cp, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
 import { dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
 import type { SiftRequest } from '../contracts/remote.js';
 import {
@@ -7,6 +7,7 @@ import {
   type Annotation,
   type BinaryDocument,
   type Catalog,
+  type HostFileListing,
   type Project,
   type ProjectWorkState,
   type Solution,
@@ -20,7 +21,7 @@ const MAX_BINARY_BYTES = 64 * 1024 * 1024;
 
 interface LegacyCatalog {
   schemaVersion: 1;
-  solutions: Array<Omit<Solution, 'workspacePath'>>;
+  solutions: Array<Omit<Solution, 'workspaceId' | 'workspacePath'>>;
   projects: Array<Omit<Project, 'sessionIds' | 'activeSessionId'>>;
   sources: Array<Omit<Source, 'solutionId' | 'originalLocation' | 'status' | 'statusMessage'>>;
   annotations: Array<{
@@ -58,6 +59,7 @@ function defaultWorkState(projectId: string, time = now()): ProjectWorkState {
     materialWidth: 280,
     conversationWidth: 480,
     materialTreeCollapsed: false,
+    pendingNavigation: null,
     updatedAt: time,
   };
 }
@@ -76,9 +78,16 @@ export class SiftRepository {
   }
 
   async dispatch(request: SiftRequest): Promise<unknown> {
-    if (request.type === 'catalog.get') return this.readCatalog();
+    if (request.type === 'catalog.get') {
+      return this.serial(async () => {
+        const catalog = await this.readCatalog();
+        if (await this.refreshLocalSourceStatuses(catalog)) await this.writeCatalog(catalog);
+        return catalog;
+      });
+    }
     if (request.type === 'note.read') return this.readNote(request.projectId);
     if (request.type === 'note.read.lines') return this.readNoteLines(request.projectId, request.startLine, request.endLine);
+    if (request.type === 'file.list') return this.listFiles(request.solutionId, request.path);
     return this.serial(() => this.execute(request));
   }
 
@@ -87,6 +96,7 @@ export class SiftRepository {
     try {
       const value = JSON.parse(await readFile(this.catalogFile, 'utf8')) as Catalog;
       if (value.schemaVersion !== 2) throw new Error(`不支持的 Sift 数据版本：${String(value.schemaVersion)}`);
+      for (const solution of value.solutions) solution.workspaceId ??= null;
       return value;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return emptyCatalog();
@@ -100,7 +110,12 @@ export class SiftRepository {
     return { content, version: versionOf(content) };
   }
 
-  private async execute(request: Exclude<SiftRequest, { type: 'catalog.get' | 'note.read' | 'note.read.lines' }>): Promise<unknown> {
+  async projectForSession(sessionId: string): Promise<Project | null> {
+    const catalog = await this.readCatalog();
+    return catalog.projects.find(project => project.sessionIds.includes(sessionId)) ?? null;
+  }
+
+  private async execute(request: Exclude<SiftRequest, { type: 'catalog.get' | 'note.read' | 'note.read.lines' | 'file.list' }>): Promise<unknown> {
     if (request.type === 'source.preview') return this.previewSource(request.id);
     if (request.type === 'source.binary') return this.readSourceBinary(request.id);
 
@@ -110,7 +125,8 @@ export class SiftRepository {
       case 'solution.create': {
         const solution: Solution = {
           id: randomUUID(), name: request.name, description: request.description,
-          workspacePath: request.workspacePath === null ? null : this.workspacePath(request.workspacePath),
+          workspaceId: request.workspaceId,
+          workspacePath: request.workspacePath == null ? null : this.workspacePath(request.workspacePath),
           createdAt: time, updatedAt: time,
         };
         catalog.solutions.push(solution);
@@ -121,6 +137,7 @@ export class SiftRepository {
         const solution = this.solution(catalog, request.id);
         solution.name = request.name;
         solution.description = request.description;
+        solution.workspaceId = request.workspaceId;
         solution.workspacePath = request.workspacePath === null ? null : this.workspacePath(request.workspacePath);
         solution.updatedAt = time;
         await this.writeCatalog(catalog);
@@ -135,9 +152,9 @@ export class SiftRepository {
       }
       case 'project.create': {
         const solution = this.solution(catalog, request.solutionId);
-        if (solution.workspacePath === null) throw new Error('请先为解决方案选择 DSH 工作区。');
+        if (solution.workspaceId === null || solution.workspacePath === null) throw new Error('请先为解决方案选择 DSH 工作区。');
         const projectId = randomUUID();
-        const notePath = request.notePath === null
+        const notePath = request.notePath == null
           ? join(solution.workspacePath, '.sift', 'projects', projectId, 'note.md')
           : this.notePathInWorkspace(request.notePath, solution.workspacePath);
         await this.ensureNote(notePath, request.title);
@@ -170,6 +187,8 @@ export class SiftRepository {
       }
       case 'project.session.bind': {
         const project = this.project(catalog, request.projectId);
+        const existing = catalog.projects.find(item => item.id !== project.id && item.sessionIds.includes(request.sessionId));
+        if (existing) throw new Error('该 DSH 会话已经关联其他 Sift 项目。');
         if (!project.sessionIds.includes(request.sessionId)) project.sessionIds.push(request.sessionId);
         if (request.activate || project.activeSessionId === null) project.activeSessionId = request.sessionId;
         project.updatedAt = time;
@@ -193,8 +212,11 @@ export class SiftRepository {
         return project;
       }
       case 'source.create': {
-        const project = this.project(catalog, request.projectId);
-        const solution = this.solution(catalog, project.solutionId);
+        const project = request.projectId ? this.project(catalog, request.projectId) : null;
+        const solutionId = project?.solutionId ?? request.solutionId;
+        if (!solutionId) throw new Error('新增素材必须指定解决方案或项目。');
+        if (request.solutionId && project && request.solutionId !== project.solutionId) throw new Error('项目与解决方案不一致。');
+        const solution = this.solution(catalog, solutionId);
         const sourceId = randomUUID();
         let location = request.location;
         if (request.kind === 'text') {
@@ -206,15 +228,25 @@ export class SiftRepository {
         } else {
           location = this.webUrl(location);
         }
-        this.rejectNoteAsSource(catalog, location);
+        if (request.kind === 'file') this.rejectNoteAsSource(catalog, location);
         const source: Source = {
           id: sourceId, solutionId: solution.id, kind: request.kind, title: request.title,
           location, originalLocation: location, mediaType: request.mediaType,
           status: 'available', statusMessage: null, createdAt: time, updatedAt: time,
         };
         catalog.sources.push(source);
-        project.sourceIds.push(source.id);
-        project.updatedAt = time;
+        if (project) {
+          project.sourceIds.push(source.id);
+          project.updatedAt = time;
+        }
+        await this.writeCatalog(catalog);
+        return source;
+      }
+      case 'source.update': {
+        const source = this.source(catalog, request.id);
+        source.title = request.title;
+        source.mediaType = request.mediaType;
+        source.updatedAt = time;
         await this.writeCatalog(catalog);
         return source;
       }
@@ -234,6 +266,15 @@ export class SiftRepository {
         await this.writeCatalog(catalog);
         return catalog;
       }
+      case 'source.classify': {
+        const source = this.source(catalog, request.id);
+        if (source.solutionId !== null) throw new Error('只有待归类素材可以重新归属。');
+        this.solution(catalog, request.solutionId);
+        source.solutionId = request.solutionId;
+        source.updatedAt = time;
+        await this.writeCatalog(catalog);
+        return source;
+      }
       case 'source.remove': {
         const source = this.source(catalog, request.id);
         if (source.solutionId !== request.solutionId) throw new Error('素材不属于当前解决方案。');
@@ -251,7 +292,7 @@ export class SiftRepository {
         const location = source.kind === 'file'
           ? this.absolutePath(request.location, '本地素材必须使用绝对路径。')
           : this.webUrl(request.location);
-        this.rejectNoteAsSource(catalog, location);
+        if (source.kind === 'file') this.rejectNoteAsSource(catalog, location);
         source.location = location;
         source.status = 'available';
         source.statusMessage = null;
@@ -329,7 +370,15 @@ export class SiftRepository {
         return state;
       }
       case 'note.write':
-        return this.writeNote(catalog, request.projectId, request.content, request.expectedVersion, request.actor, time);
+        return this.writeNote(catalog, request.projectId, request.content, request.expectedVersion, request.actor ?? 'human', time);
+      case 'note.insert': {
+        const current = await this.readNoteFromCatalog(catalog, request.projectId);
+        this.expectVersion(current, request.expectedVersion);
+        const lines = current.content.split('\n');
+        if (request.afterLine > lines.length) throw new Error('笔记插入位置超出范围。');
+        lines.splice(request.afterLine, 0, ...request.content.split('\n'));
+        return this.writeNote(catalog, request.projectId, lines.join('\n'), request.expectedVersion, 'ai', time);
+      }
       case 'note.replace.lines': {
         const current = await this.readNoteFromCatalog(catalog, request.projectId);
         this.expectVersion(current, request.expectedVersion);
@@ -466,7 +515,7 @@ export class SiftRepository {
   }
 
   private expectVersion(document: TextDocument, expectedVersion: string): void {
-    if (document.version !== expectedVersion) throw new Error('笔已经在其他位置发生变化，请重新加载后再修改。');
+    if (document.version !== expectedVersion) throw new Error('笔记已经在其他位置发生变化，请重新加载后再修改。');
   }
 
   private solution(catalog: Catalog, id: string): Solution {
@@ -537,6 +586,44 @@ export class SiftRepository {
     }
   }
 
+  private async listFiles(solutionId: string, requestedPath: string | null): Promise<HostFileListing> {
+    const catalog = await this.readCatalog();
+    const solution = this.solution(catalog, solutionId);
+    if (!solution.workspacePath) throw new Error('请先为解决方案选择 DSH 工作区。');
+    const path = requestedPath === null ? solution.workspacePath : resolve(requestedPath);
+    if (requestedPath !== null && !isAbsolute(requestedPath)) throw new Error('文件浏览器只接受绝对目录路径。');
+    const info = await stat(path);
+    if (!info.isDirectory()) throw new Error('文件浏览位置不是目录。');
+    const rows = await readdir(path, { withFileTypes: true });
+    const entries = rows
+      .filter(row => row.isDirectory() || row.isFile())
+      .sort((left, right) => Number(right.isDirectory()) - Number(left.isDirectory()) || left.name.localeCompare(right.name))
+      .slice(0, 1_000)
+      .map(row => ({ name: row.name, path: join(path, row.name), kind: row.isDirectory() ? 'directory' as const : 'file' as const }));
+    const parent = dirname(path);
+    return { path, parent: parent === path ? null : parent, entries, truncated: rows.length > 1_000 };
+  }
+
+  private async refreshLocalSourceStatuses(catalog: Catalog): Promise<boolean> {
+    let changed = false;
+    for (const source of catalog.sources) {
+      if (source.kind === 'url') continue;
+      let status: Source['status'] = 'available';
+      let statusMessage: string | null = null;
+      try {
+        const info = await stat(source.location);
+        if (!info.isFile()) { status = 'unreadable'; statusMessage = '素材位置不是文件。'; }
+      } catch (error) {
+        status = (error as NodeJS.ErrnoException).code === 'ENOENT' ? 'missing' : 'unreadable';
+        statusMessage = messageOf(error);
+      }
+      if (source.status !== status || source.statusMessage !== statusMessage) {
+        source.status = status; source.statusMessage = statusMessage; source.updatedAt = now(); changed = true;
+      }
+    }
+    return changed;
+  }
+
   private async ensureNote(path: string, title: string): Promise<void> {
     await mkdir(dirname(path), { recursive: true });
     try {
@@ -572,7 +659,7 @@ export class SiftRepository {
 
   private migrateV1(legacy: LegacyCatalog): Catalog {
     const migrated = emptyCatalog();
-    migrated.solutions = legacy.solutions.map(solution => ({ ...solution, workspacePath: null }));
+    migrated.solutions = legacy.solutions.map(solution => ({ ...solution, workspaceId: null, workspacePath: null }));
     migrated.projects = legacy.projects.map(project => ({ ...project, sessionIds: [], activeSessionId: null }));
     migrated.workStates = migrated.projects.map(project => defaultWorkState(project.id, project.updatedAt));
 

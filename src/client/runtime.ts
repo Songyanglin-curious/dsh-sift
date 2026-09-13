@@ -10,6 +10,11 @@ export class SiftClientRuntime {
   private readonly listeners = new Set<() => void>();
   private readonly invalidators = new Set<(sessionId: string) => void>();
   private draftSaver: { projectId: string; save(): Promise<void> } | null = null;
+  private readonly pendingSubmissions = new Map<string, Array<{
+    projectId: string;
+    annotationVersions: Array<{ annotationId: string; commentVersion: number }>;
+    messageTextVersion: string;
+  }>>();
   private viewSnapshot: { catalog: Catalog | null; activeProjectId: string | null } = { catalog: null, activeProjectId: null };
 
   constructor(readonly remote: SiftRemote) {}
@@ -72,21 +77,27 @@ export class SiftClientRuntime {
     if (!project || project.id !== this.activeProjectId) return;
     if (input.signal.aborted) throw input.signal.reason;
     if (this.draftSaver?.projectId === project.id) await this.draftSaver.save();
-  }
-
-  async settled(input: { sessionId: string; text: string; mode: SubmissionMode; outcome: SubmitOutcome }): Promise<void> {
-    if (input.outcome.kind !== 'success' || !this.catalog) return;
-    const project = this.projectForSession(input.sessionId);
-    if (!project || project.id !== this.activeProjectId) return;
+    if (!this.catalog) return;
     const state = this.catalog.workStates.find(item => item.projectId === project.id);
     const selected = new Set(state?.selectedAnnotationIds ?? []);
     const annotationVersions = this.catalog.annotations
       .filter(item => item.projectId === project.id && selected.has(item.id))
       .map(item => ({ annotationId: item.id, commentVersion: item.currentCommentVersion }));
-    if (annotationVersions.length === 0) return;
+    const key = this.submissionKey(input.sessionId, input.mode, input.text);
+    const pending = this.pendingSubmissions.get(key) ?? [];
+    pending.push({ projectId: project.id, annotationVersions, messageTextVersion: this.hashText(input.text) });
+    this.pendingSubmissions.set(key, pending);
+  }
+
+  async settled(input: { sessionId: string; text: string; mode: SubmissionMode; outcome: SubmitOutcome }): Promise<void> {
+    const key = this.submissionKey(input.sessionId, input.mode, input.text);
+    const pending = this.pendingSubmissions.get(key);
+    const frozen = pending?.shift();
+    if (pending?.length === 0) this.pendingSubmissions.delete(key);
+    if (input.outcome.kind !== 'success' || !frozen || frozen.annotationVersions.length === 0) return;
     await dispatch(this.remote, {
-      type: 'annotation.send.record', projectId: project.id, sessionId: input.sessionId,
-      mode: input.mode, annotationVersions, messageTextVersion: this.hashText(input.text),
+      type: 'annotation.send.record', projectId: frozen.projectId, sessionId: input.sessionId,
+      mode: input.mode, annotationVersions: frozen.annotationVersions, messageTextVersion: frozen.messageTextVersion,
     });
     await this.refresh();
     this.invalidate(input.sessionId);
@@ -121,6 +132,10 @@ export class SiftClientRuntime {
       hash = Math.imul(hash, 16777619);
     }
     return `fnv1a-${(hash >>> 0).toString(16).padStart(8, '0')}`;
+  }
+
+  private submissionKey(sessionId: string, mode: SubmissionMode, text: string): string {
+    return `${sessionId}\u0000${mode}\u0000${this.hashText(text)}`;
   }
 
   private emit(): void {

@@ -73,26 +73,26 @@ Sift 将以 DSH 插件的形式实现，利用其 AI 能力和 Web 可视化基�
 
 ## 当前状态
 
-初版已经形成可使用的本地闭环：点击 DSH 对话框右侧的 `Sift` 按钮即可打开三栏工作台，创建解决方案与项目、关联素材、记录批注、编辑 Markdown，并把整理后的提示词放入当前 DSH 对话框。AI 返回的建议不会自动改写笔记；用户可以继续编辑建议，再明确应用到 Markdown 选区并保存。
+Sift 以 DSH 内的常驻知识工作台运行。它保留 DSH 首页和普通对话，在左侧导航提供 `Sift` 入口，并按“首页 → 解决方案 → 项目工作台”组织日常整理。项目工作台复用 DSH 原生消息流、输入框、模型与工具展示；Sift 不复制会话组件，也不维护第二套发送流程。
 
-Sift 的关系数据保存在当前 `DSH_HOME/sift/catalog.json`。项目成果仍是用户指定位置的普通 `.md` 文件；本地文件和网页只保存引用，粘贴文本则单独保存在 `DSH_HOME/sift/sources`。同一素材可以关联到多个项目，从项目移除引用不会删除原始文件。
+Sift 的关系数据保存在当前 `DSH_HOME/sift/catalog.json`。解决方案显式关联一个 DSH 工作区，项目成果是工作区内的普通 `.md` 文件。素材、批注快照、项目会话、发送记录、工作现场和笔记修订历史均与成果文件分离；移除素材关系不会删除原文件。
 
 ### 初版使用流程
 
-1. 在 DSH 会话输入框右侧点击 `Sift`。
-2. 创建或选择一个解决方案，再创建项目并指定 Markdown 文件的绝对路径。
-3. 添加粘贴文本、本地 UTF-8 文本文件或网页 URL；已有素材可以复用到其他项目。
-4. 在素材或笔记中选择文字，补充可编辑的引文与批注意图。
-5. 生成提示词，审核或修改后放入 DSH 对话框，与 AI 继续讨论。
-6. 将认可的 AI 建议粘贴到建议区，继续编辑后应用到当前 Markdown 选区并保存。
+1. 从 DSH 左侧导航进入 Sift，创建解决方案并明确选择工作区。
+2. 创建项目；留空笔记路径会在工作区 `.sift/projects/<project-id>/note.md` 生成成果，也可选择工作区内已有 Markdown。
+3. 在解决方案共享库或项目中添加文件、URL、粘贴文本，并将共享素材复用到项目。
+4. 在素材、成果笔记或原生对话中选择文字并写批注。
+5. 在原生输入框下的“批注 · 数量”中勾选记录并核对发送预览，然后仍使用 DSH 原生发送按钮。
+6. 明确要求 AI 修改成果后，项目会话通过受限的 Sift 笔记工具直接写回；在修改历史中查看差异或按版本回退。
 
-当前网页预览上限为 512 KiB，主要面向文本内容；二进制文档解析、自动整篇生成和知识库检索不在初版范围内。
+初版阅读器包括 Milkdown/CodeMirror Markdown、文本层 PDF.js、docx-preview 和 Readability 网页正文。不包含旧 `.doc` 转换、扫描 PDF OCR、登录网页抓取或 Office 高保真编辑。
 
 ## 本地开发
 
 当前开发环境要求：
 
-- DSH `0.1.2-rc.1`
+- DSH `0.1.3-alpha.2` 源码版，并包含 Sift 所需的组合布局、发送扩展和会话工具约束接口
 - Node.js 24 或更高版本
 - pnpm `11.25.0`
 
@@ -108,13 +108,14 @@ pnpm build
 日常开发使用仓库内独立的 `.debug/development` 作为 `DSH_HOME`，通过 `link:` 加载当前源码，不修改正式 DSH Home 或 Profile：
 
 ```powershell
+$env:SIFT_DSH_SOURCE = 'D:\mycode\deepseek-harness'
 pnpm dev:setup
 pnpm dev
 pnpm dev:status
 pnpm dev:clean
 ```
 
-开发 Web 默认地址为 `http://127.0.0.1:9082`。可以通过 `SIFT_DEV_PORT` 修改端口；如果无法自动定位 DSH，可以通过 `SIFT_DSH_ENTRY` 指向 DSH 的 `lib/bin.js`。
+开发 Web 默认地址为 `http://127.0.0.1:9082`，可以通过 `SIFT_DEV_PORT` 修改端口。当前必需接口尚未进入已发布 DSH 包，开发脚本会校验 `SIFT_DSH_SOURCE` 与源码版本；旧 DSH 只显示升级提示，不退回旧弹窗方案。
 
 开发期间，Client 修改会重新构建并交给 DSH Client HMR；Host、Bundle patch 或依赖修改会触发受控重启。
 
@@ -123,3 +124,5 @@ pnpm dev:clean
 ```powershell
 pnpm verify:package
 ```
+
+更多细节见[文档索引](docs/index.md)。本仓库开发不执行 npm 发布或 Git 推送。
