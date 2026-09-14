@@ -7,7 +7,7 @@ import { buildArtifacts, buildClient, buildHost, root } from './build.mjs';
 import { launchDsh, runDsh, stopChild } from './runtime/process.mjs';
 
 const PACKAGE_NAME = '@songyanglin/dsh-sift';
-const DSH_VERSION = '0.1.2-rc.1';
+const DSH_VERSION = '0.1.5-rc.2';
 const action = process.argv[2] ?? 'start';
 export const home = resolve(root, '.debug/development');
 const profile = resolve(home, 'profiles/web');
