@@ -10,7 +10,7 @@ export async function buildHost(outdir = resolve(root, 'dist')) {
   await mkdir(outdir, { recursive: true });
   await build({
     absWorkingDir: root,
-    entryPoints: ['src/host/index.ts'],
+    entryPoints: ['src/host/index.ts', 'src/host/typert.ts'],
     outdir: resolve(outdir, 'host'),
     bundle: true,
     platform: 'node',

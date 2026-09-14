@@ -1,44 +1,39 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { apply as applyClient, inject } from '../src/client/index.js';
-import { apply as applyHost, name } from '../src/host/index.js';
+import { apply as applyClient, createLatestProfileReader, fitLayout, inject } from '../src/client/index.js';
+import { name, readWorkspaceProfile, SiftService, writeWorkspaceProfile } from '../src/host/index.js';
 
 const root = resolve(import.meta.dirname, '..');
 
 describe('Sift plugin scaffold', () => {
-  it('loads and unloads the empty Host contribution', () => {
-    const info = vi.fn();
-    let cleanup = () => {};
-    applyHost({
-      logger: { info },
-      effect: (factory: () => () => void) => { cleanup = factory(); },
-    } as never);
-
+  it('exports the workspace-profile Host service', () => {
     expect(name).toBe('sift');
-    expect(info).toHaveBeenCalledWith('Sift 插件已加载。');
-    cleanup();
-    expect(info).toHaveBeenCalledWith('Sift 插件已卸载。');
+    expect(SiftService.inject).toEqual(['workspaceRegistry']);
   });
 
-  it('registers one disposable Client scaffold marker', () => {
+  it('registers one disposable Client workspace profile marker', async () => {
     const dispose = vi.fn();
-    let registered;
-    let marker;
+    const registrations: unknown[] = [];
     const slots = {
       inject: vi.fn((_name, factory) => factory()),
       register: vi.fn((options, component) => {
-        registered = options;
-        marker = component;
+        registrations.push({ options, component });
         return dispose;
       }),
     };
 
-    applyClient({ slots });
-    expect(inject).toEqual(['slots']);
-    expect(slots.inject).toHaveBeenCalledWith('conversation.input.right', expect.any(Function));
-    expect(registered).toEqual({ name: 'conversation.input.right', id: 'sift-scaffold', order: 90 });
-    expect(marker().props.children).toBe('Sift');
+    const disposeRemote = vi.fn();
+    await applyClient({
+      slots,
+      remote: { $mount: vi.fn(async () => disposeRemote) },
+      get: () => ({ getWorkspaceProfile: vi.fn() }),
+    });
+    expect(inject).toEqual(['slots', 'workspaces', 'sessions', 'remote', 'uiWorkspace']);
+    expect(slots.inject).toHaveBeenCalledWith('sidebar.footer.action', expect.any(Function));
+    expect(registrations.map((entry: any) => entry.options)).toEqual([
+      { name: 'sidebar.footer.action', id: 'sift-workspace-profile', order: 90 },
+    ]);
     expect(slots.inject.mock.results[0].value).toBe(dispose);
   });
 
@@ -49,9 +44,61 @@ describe('Sift plugin scaffold', () => {
 
     expect(manifest.name).toBe('@songyanglin/dsh-sift');
     expect(manifest.exports).toHaveProperty('./client', './dist/client/index.js');
-    expect(manifest.exports).not.toHaveProperty('./typert');
+    expect(manifest.exports).toHaveProperty('./typert', './dist/host/typert.js');
+    expect(manifest.dsh.client.immediately).toBe(true);
     expect(manifest.files).toEqual(['dist', 'cordis.patch.yml', 'README.md', 'LICENSE']);
     expect(patch).toContain("name: '@songyanglin/dsh-sift'");
     expect(combined).not.toContain('apb');
+  });
+});
+
+describe('Workspace profile metadata', () => {
+  it('fits expanded and collapsed columns while preserving minimum widths', () => {
+    expect(fitLayout({ widths: [280, 480, 520], collapsed: [false, false, false] }, 1400).widths.reduce((sum, value) => sum + value, 0)).toBe(1388);
+    expect(fitLayout({ widths: [280, 480, 520], collapsed: [true, false, false] }, 1000)).toMatchObject({ collapsed: [true, false, false], widths: [44, expect.any(Number), expect.any(Number)] });
+    expect(fitLayout({ widths: [10, 10, 10], collapsed: [false, false, false] }, 600).widths).toEqual([220, 320, 360]);
+  });
+
+  it('drops an older response after a faster workspace switch', async () => {
+    const resolvers = new Map<string, (value: any) => void>();
+    const read = vi.fn((id: string) => new Promise<any>(resolve => resolvers.set(id, resolve)));
+    const latest = createLatestProfileReader(read);
+    const old = latest('old');
+    const current = latest('current');
+    resolvers.get('current')!({ workspaceId: 'current', title: 'Current', profile: 'sift', status: 'ready' });
+    resolvers.get('old')!({ workspaceId: 'old', title: 'Old', profile: 'default', status: 'missing' });
+    await expect(current).resolves.toMatchObject({ workspaceId: 'current' });
+    await expect(old).resolves.toBeUndefined();
+  });
+
+  it('reads valid, missing, and invalid config without rewriting it', async () => {
+    const fs = await import('node:fs/promises');
+    const path = await import('node:path');
+    const temp = await fs.mkdtemp(path.join(process.env.TEMP ?? process.cwd(), 'sift-profile-'));
+    const workspace = { id: 'sift-id', title: 'Sift', path: temp };
+    expect((await readWorkspaceProfile(workspace)).profile).toBe('default');
+    await fs.mkdir(path.join(temp, '.sift'));
+    const config = path.join(temp, '.sift', 'config.json');
+    await fs.writeFile(config, JSON.stringify({ schemaVersion: 1, profile: 'sift' }));
+    expect((await readWorkspaceProfile(workspace)).profile).toBe('sift');
+    await fs.writeFile(config, JSON.stringify({ schemaVersion: 9, profile: 'sift' }));
+    const unsupported = await readWorkspaceProfile(workspace);
+    expect(unsupported.status).toBe('invalid');
+    expect(await fs.readFile(config, 'utf8')).toContain('schemaVersion');
+    await fs.writeFile(config, '{broken');
+    const invalid = await readWorkspaceProfile(workspace);
+    expect(invalid.status).toBe('invalid');
+    expect(await fs.readFile(config, 'utf8')).toBe('{broken');
+  });
+
+  it('writes the selected profile as durable workspace metadata', async () => {
+    const fs = await import('node:fs/promises');
+    const path = await import('node:path');
+    const temp = await fs.mkdtemp(path.join(process.env.TEMP ?? process.cwd(), 'sift-profile-write-'));
+    const workspace = { id: 'created-id', title: 'Created', path: temp };
+    await writeWorkspaceProfile(workspace, 'default');
+    expect(await readWorkspaceProfile(workspace)).toMatchObject({ profile: 'default', status: 'ready' });
+    await writeWorkspaceProfile(workspace, 'sift');
+    expect(await readWorkspaceProfile(workspace)).toMatchObject({ profile: 'sift', status: 'ready' });
   });
 });

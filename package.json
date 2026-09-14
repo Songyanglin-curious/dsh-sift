@@ -12,6 +12,7 @@
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./client": "./dist/client/index.js",
     "./package.json": "./package.json",
+    "./typert": "./dist/host/typert.js",
     ".": {
       "types": "./dist/types/host/index.d.ts",
       "default": "./dist/host/index.js"
@@ -35,6 +36,7 @@
     "dev:clean": "node scripts/dev.mjs clean",
     "dev:setup": "node scripts/dev.mjs setup",
     "dev:status": "node scripts/dev.mjs status",
+    "dev:workspace-profile": "node scripts/workspace-profile.mjs",
     "prepack": "pnpm check && pnpm test && pnpm build",
     "test": "vitest run",
     "verify:package": "node scripts/verify-package.mjs"
@@ -44,24 +46,38 @@
       "patch": "./cordis.patch.yml"
     },
     "client": {
+      "immediately": true,
       "inject": [
-        "@deepseek-ai/dsh-client-ui-conversation"
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-api-workspace-controller",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-workspace"
       ],
       "platform": "web"
     }
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "4.0.2"
+    "@deepseek-ai/cordis": "4.0.2",
+    "@deepseek-ai/dsh-typert-protocol": "0.1.5-rc.2"
+  },
+  "dependencies": {
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.2",
+    "@deepseek-ai/dsh-typert-protocol": "0.1.5-rc.2",
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",
     "esbuild": "^0.25.0",
     "js-yaml": "^4.1.0",
     "react": "^19.0.0",
     "typescript": "^5.9.0",
-    "vitest": "^3.2.0"
+    "vitest": "^3.2.0",
+    "zod": "4.4.3"
   },
   "engines": {
     "node": ">=24.0.0"

@@ -14,6 +14,7 @@ const installedDir = join(profileDir, 'node_modules', ...PACKAGE_NAME.split('/')
 const env = { ...process.env, DSH_HOME: home, DSH_TELEMETRY_DISABLED: '1' };
 const REQUIRED_FILES = [
   'dist/host/index.js',
+  'dist/host/typert.js',
   'dist/client/index.js',
   'dist/types/host/index.d.ts',
   'cordis.patch.yml',

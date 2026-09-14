@@ -1,0 +1,59 @@
+import { z } from 'zod';
+import type { TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol';
+
+const profileSchema = z.object({
+  workspaceId: z.string(),
+  title: z.string(),
+  profile: z.union([z.literal('default'), z.literal('sift')]),
+  status: z.union([z.literal('ready'), z.literal('missing'), z.literal('invalid')]),
+  message: z.string().optional(),
+}).readonly();
+
+export const PACKAGE = '@songyanglin/dsh-sift';
+
+export const descriptors: TypertRemoteContribution['descriptors'] = [{
+    id: '@songyanglin/dsh-sift#sift/getWorkspaceProfile',
+    service: 'sift',
+    namespace: 'sift',
+    method: 'getWorkspaceProfile',
+    implementation: 'getWorkspaceProfile',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'input',
+      wire: 'input',
+      source: 'json',
+      codec: {
+        mode: 'strict',
+        typeSymbol: '@songyanglin/dsh-sift#WorkspaceProfileRequest',
+        schema: z.object({ workspaceId: z.string() }).readonly(),
+      },
+    }],
+    result: {
+      mode: 'strict',
+      typeSymbol: '@songyanglin/dsh-sift#WorkspaceProfileResult',
+      schema: profileSchema,
+    },
+  }, {
+    id: '@songyanglin/dsh-sift#sift/setWorkspaceProfile',
+    service: 'sift',
+    namespace: 'sift',
+    method: 'setWorkspaceProfile',
+    implementation: 'setWorkspaceProfile',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'input', wire: 'input', source: 'json',
+      codec: {
+        mode: 'strict',
+        typeSymbol: '@songyanglin/dsh-sift#SetWorkspaceProfileRequest',
+        schema: z.object({ workspaceId: z.string(), profile: z.union([z.literal('default'), z.literal('sift')]) }).readonly(),
+      },
+    }],
+    result: { mode: 'strict', typeSymbol: '@songyanglin/dsh-sift#WorkspaceProfileResult', schema: profileSchema },
+  }];
+
+export const TYPERT_REMOTE: TypertRemoteContribution = {
+  package: PACKAGE,
+  descriptors,
+};
+
+export default TYPERT_REMOTE;
