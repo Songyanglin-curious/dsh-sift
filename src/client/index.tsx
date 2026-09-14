@@ -1,6 +1,7 @@
 import { useEffect, useSyncExternalStore, useState, useRef } from 'react';
 import type { ComponentType } from 'react';
 import { TYPERT_REMOTE } from '../remote.js';
+import { mountDocumentEditor } from './document-editor.js';
 
 interface WorkspaceView { workspaceId: string; title: string; sessionIds: readonly string[] }
 interface WorkspaceSnapshot { items: readonly WorkspaceView[]; phase: 'pending' | 'ready' }
@@ -71,7 +72,7 @@ function emptySessions(): SessionSnapshot { return { phase: 'pending' } }
 
 const DEFAULT_LAYOUT: LayoutState = { widths: [280, 480, 520], collapsed: [false, false, false] };
 const MIN_WIDTHS: [number, number, number] = [220, 320, 360];
-const COLLAPSED_WIDTH = 44;
+const COLLAPSED_WIDTH = 0;
 
 export function fitLayout(state: LayoutState, containerWidth: number): LayoutState {
   const available = Math.max(0, containerWidth - 12);
@@ -174,8 +175,7 @@ export function apply(ctx: ClientContext): void {
   if (typeof document !== 'undefined') {
     const style = document.createElement('style');
     style.dataset.dshSiftLayout = 'three-column';
-    style.textContent = '[data-sift-three-column]{display:grid!important;grid-template-columns:var(--sift-w0) 6px var(--sift-w1) 6px var(--sift-w2)!important;grid-template-rows:minmax(0,1fr)!important;overflow:auto!important}[data-sift-three-column]>[data-sift-column="materials"]{grid-column:1}[data-sift-three-column]>[data-sift-resizer="0"]{grid-column:2}[data-sift-three-column]>[data-sift-column="document"]{grid-column:3}[data-sift-three-column]>[data-sift-resizer="1"]{grid-column:4}[data-sift-three-column]>[data-slot="main"]{display:block!important;grid-column:5;grid-row:1;min-width:0;min-height:0;overflow:hidden}[data-sift-three-column]>[data-slot="main"]>[data-slot="main.conversation"]{display:block!important;height:100%;min-width:0;min-height:0}[data-sift-column]{grid-row:1;min-width:0;overflow:auto;border-right:1px solid var(--dsw-alias-border-l4,#e5e7eb);background:var(--dsw-alias-bg-base,#fff);color:var(--dsw-alias-label-primary,#111827)}[data-sift-column]>header{padding:12px;min-height:42px;border-bottom:1px solid var(--dsw-alias-border-l4,#e5e7eb);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 8px;box-sizing:border-box}[data-sift-column]>header>small{grid-column:1/-1}[data-sift-column]>header>button,[data-sift-chat-toggle]{border:0;background:transparent;color:inherit;cursor:pointer;font-size:18px}[data-sift-column]>header>small,[data-sift-column]>div{color:var(--dsw-alias-label-tertiary,#9ca3af);font-size:12px}[data-sift-column]>div{padding:16px;font-size:13px}[data-sift-column][data-collapsed]>header{height:100%;padding:10px 7px;display:flex;align-items:center;flex-direction:column}[data-sift-column][data-collapsed]>header>strong{writing-mode:vertical-rl}[data-sift-column][data-collapsed]>header>small,[data-sift-column][data-collapsed]>div{display:none}[data-sift-resizer]{grid-row:1;cursor:col-resize;background:var(--dsw-alias-border-l4,#e5e7eb);touch-action:none;z-index:4}[data-sift-resizer]:hover,[data-sift-resizer][data-dragging]{background:var(--dsw-alias-state-business-primary,#4f7cff)}[data-sift-conversation-control]{grid-column:5;grid-row:1;align-self:start;justify-self:start;z-index:5;overflow:visible!important;background:transparent!important;border:0!important;pointer-events:none}[data-sift-chat-toggle]{pointer-events:auto;margin:8px;padding:4px 8px;border-radius:6px;background:var(--dsw-alias-bg-base,#fff);box-shadow:0 1px 4px #0002}[data-sift-three-column][data-chat-collapsed]>[data-slot="main"]{visibility:hidden}[data-sift-three-column][data-chat-collapsed]>[data-sift-conversation-control]{visibility:visible}';
-    style.textContent += 'button[data-sift-replaced]{display:none!important}[data-sift-workspace-creator]{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;background:#0006}[data-sift-workspace-creator]>[role=dialog]{width:min(520px,calc(100vw - 32px));padding:20px;border-radius:12px;background:var(--dsw-alias-bg-base,#fff);color:var(--dsw-alias-label-primary,#111827);box-shadow:0 18px 60px #0004}[data-sift-workspace-creator] header,[data-sift-workspace-creator] footer{display:flex;align-items:center;justify-content:space-between;gap:12px}[data-sift-workspace-creator] header button{border:0;background:transparent;font-size:22px;cursor:pointer}[data-sift-workspace-creator] .types{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:18px 0}[data-sift-workspace-creator] .types button{display:flex;min-height:96px;padding:16px;flex-direction:column;align-items:flex-start;gap:8px;border:1px solid var(--dsw-alias-border-l4,#d1d5db);border-radius:10px;background:transparent;color:inherit;cursor:pointer;text-align:left}[data-sift-workspace-creator] .types button[data-selected]{border-color:var(--dsw-alias-state-business-primary,#4f7cff);box-shadow:0 0 0 2px #4f7cff33}[data-sift-workspace-creator] small,[data-sift-workspace-creator]>[role=dialog]>p{color:var(--dsw-alias-label-tertiary,#6b7280)}[data-sift-workspace-creator] [data-error]{min-height:22px;color:#dc2626;font-size:13px}[data-sift-workspace-creator] footer{justify-content:flex-end}[data-sift-workspace-creator] footer button{padding:7px 14px;border:1px solid var(--dsw-alias-border-l4,#d1d5db);border-radius:7px;background:transparent;color:inherit;cursor:pointer}[data-sift-workspace-creator] footer [data-action=create]{border-color:transparent;background:var(--dsw-alias-state-business-primary,#4f7cff);color:#fff}';
+    style.textContent = `[data-sift-three-column]{position:relative;display:grid!important;grid-template-columns:var(--sift-w0) var(--sift-g0) var(--sift-w1) var(--sift-g1) var(--sift-w2)!important;grid-template-rows:36px minmax(0,1fr)!important;overflow:auto!important}[data-sift-layout-toolbar]{position:absolute;inset:0 0 auto 0;height:36px;z-index:7;display:flex;align-items:center;gap:2px;padding:0 10px;box-sizing:border-box;border-bottom:1px solid var(--dsw-alias-border-l4,#e5e7eb);background:var(--dsw-alias-bg-base,#fff)}[data-sift-panel-tabs]{display:flex;align-items:center;height:26px;padding:2px;border:1px solid var(--dsw-alias-border-l4,#e5e7eb);border-radius:6px;box-sizing:border-box}[data-sift-layout-toolbar] button{height:22px;padding:0 8px;border:0;border-radius:5px;background:transparent;color:var(--dsw-alias-label-tertiary,#8b919a);font:inherit;font-size:12px;cursor:pointer}[data-sift-layout-toolbar] button:hover{background:var(--dsw-alias-bg-raised,#f4f5f6);color:var(--dsw-alias-label-primary,#111827)}[data-sift-layout-toolbar] button[aria-pressed=true]{background:var(--dsw-alias-bg-raised,#f1f2f3);color:var(--dsw-alias-label-primary,#111827);font-weight:500}[data-sift-layout-toolbar] [data-action=reset]{margin-left:auto}[data-sift-three-column]>[data-sift-column=materials]{grid-column:1}[data-sift-three-column]>[data-sift-resizer='0']{grid-column:2}[data-sift-three-column]>[data-sift-column=document]{grid-column:3}[data-sift-three-column]>[data-sift-resizer='1']{grid-column:4}[data-sift-three-column]>[data-slot=main]{display:block!important;grid-column:5;grid-row:2;min-width:0;min-height:0;overflow:hidden}[data-sift-three-column]>[data-slot=main]>[data-slot='main.conversation']{display:block!important;height:100%;min-width:0;min-height:0}[data-sift-column]{grid-row:2;min-width:0;overflow:auto;border-right:1px solid var(--dsw-alias-border-l4,#e5e7eb);background:var(--dsw-alias-bg-base,#fff);color:var(--dsw-alias-label-primary,#111827)}[data-sift-column]>header{padding:12px;min-height:68px;border-bottom:1px solid var(--dsw-alias-border-l4,#e5e7eb);display:grid;gap:4px;box-sizing:border-box}[data-sift-column]>header>small,[data-sift-column]>div{color:var(--dsw-alias-label-tertiary,#9ca3af);font-size:12px}[data-sift-column]>div{padding:16px;font-size:13px}[data-sift-column][data-collapsed]{visibility:hidden;pointer-events:none}[data-sift-resizer]{grid-row:2;position:relative;cursor:col-resize;background:transparent;touch-action:none;z-index:4}[data-sift-resizer]::after{content:'';position:absolute;inset:0 auto 0 50%;width:1px;transform:translateX(-50%);background:var(--dsw-alias-border-l4,#e5e7eb)}[data-sift-resizer]:hover::after,[data-sift-resizer][data-dragging]::after{background:var(--dsw-alias-label-tertiary,#8b919a)}[data-sift-three-column][data-chat-collapsed]>[data-slot=main]{visibility:hidden;pointer-events:none}`;    style.textContent += 'button[data-sift-replaced]{display:none!important}[data-sift-workspace-creator]{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;background:#0006}[data-sift-workspace-creator]>[role=dialog]{width:min(520px,calc(100vw - 32px));padding:20px;border-radius:12px;background:var(--dsw-alias-bg-base,#fff);color:var(--dsw-alias-label-primary,#111827);box-shadow:0 18px 60px #0004}[data-sift-workspace-creator] header,[data-sift-workspace-creator] footer{display:flex;align-items:center;justify-content:space-between;gap:12px}[data-sift-workspace-creator] header button{border:0;background:transparent;font-size:22px;cursor:pointer}[data-sift-workspace-creator] .types{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:18px 0}[data-sift-workspace-creator] .types button{display:flex;min-height:96px;padding:16px;flex-direction:column;align-items:flex-start;gap:8px;border:1px solid var(--dsw-alias-border-l4,#d1d5db);border-radius:10px;background:transparent;color:inherit;cursor:pointer;text-align:left}[data-sift-workspace-creator] .types button[data-selected]{border-color:var(--dsw-alias-state-business-primary,#4f7cff);box-shadow:0 0 0 2px #4f7cff33}[data-sift-workspace-creator] small,[data-sift-workspace-creator]>[role=dialog]>p{color:var(--dsw-alias-label-tertiary,#6b7280)}[data-sift-workspace-creator] [data-error]{min-height:22px;color:#dc2626;font-size:13px}[data-sift-workspace-creator] footer{justify-content:flex-end}[data-sift-workspace-creator] footer button{padding:7px 14px;border:1px solid var(--dsw-alias-border-l4,#d1d5db);border-radius:7px;background:transparent;color:inherit;cursor:pointer}[data-sift-workspace-creator] footer [data-action=create]{border-color:transparent;background:var(--dsw-alias-state-business-primary,#4f7cff);color:#fff}';
     document.head.appendChild(style);
     ctx.effect?.(() => () => style.remove(), 'sift: three-column styles');
   }
@@ -190,6 +190,7 @@ export function apply(ctx: ClientContext): void {
     let activeWorkspaceId: string | undefined;
     let state: LayoutState = structuredClone(DEFAULT_LAYOUT);
     let resizeObserver: ResizeObserver | undefined;
+    let disposeEditor: (() => void) | undefined;
     const storageKey = (workspaceId: string) => `dsh-sift:layout:${workspaceId}`;
     const loadState = (workspaceId: string): LayoutState => {
       try {
@@ -201,33 +202,60 @@ export function apply(ctx: ClientContext): void {
     const persist = () => { if (activeWorkspaceId) localStorage.setItem(storageKey(activeWorkspaceId), JSON.stringify(state)); };
     const applyState = () => {
       if (!mountedCenter) return;
-      state = fitLayout(state, mountedCenter.clientWidth);
-      state.widths.forEach((width, index) => mountedCenter!.style.setProperty(`--sift-w${index}`, `${width}px`));
-      mountedCenter.toggleAttribute('data-chat-collapsed', state.collapsed[2]);
-      document.querySelectorAll<HTMLElement>('[data-sift-column]').forEach((node, index) => node.toggleAttribute('data-collapsed', state.collapsed[index]));
-      (['materials', 'document'] as const).forEach((id, index) => {
-        const button = document.querySelector<HTMLButtonElement>(`[data-sift-column="${id}"] button`);
-        if (button) { button.textContent = state.collapsed[index] ? '›' : '‹'; button.title = state.collapsed[index] ? `展开${index === 0 ? '素材' : '产出'}` : `折叠${index === 0 ? '素材' : '产出'}`; }
+      const fitted = fitLayout(state, mountedCenter.clientWidth);
+      fitted.widths.forEach((width, index) => {
+        mountedCenter!.style.setProperty(`--sift-w${index}`, `${width}px`);
+        if (!state.collapsed[index]) state.widths[index] = width;
       });
-      const chatButton = document.querySelector<HTMLButtonElement>('[data-sift-chat-toggle]');
-      if (chatButton) { chatButton.textContent = state.collapsed[2] ? '›' : '‹'; chatButton.title = state.collapsed[2] ? '展开对话' : '折叠对话'; }
+      mountedCenter.style.setProperty('--sift-g0', state.collapsed[0] || state.collapsed[1] ? '0px' : '6px');
+      mountedCenter.style.setProperty('--sift-g1', state.collapsed[1] || state.collapsed[2] ? '0px' : '6px');
+      mountedCenter.toggleAttribute('data-chat-collapsed', state.collapsed[2]);
+      mountedCenter.querySelector<HTMLElement>('[data-sift-column="materials"]')?.toggleAttribute('data-collapsed', state.collapsed[0]);
+      mountedCenter.querySelector<HTMLElement>('[data-sift-column="document"]')?.toggleAttribute('data-collapsed', state.collapsed[1]);
+      mountedCenter.querySelectorAll<HTMLButtonElement>('[data-sift-panel-toggle]').forEach(button => {
+        const index = Number(button.dataset.siftPanelToggle);
+        button.setAttribute('aria-pressed', String(!state.collapsed[index]));
+        button.title = state.collapsed[index] ? `显示${button.textContent}` : `隐藏${button.textContent}`;
+      });
       window.dispatchEvent(new Event('resize'));
     };
     const clearLayout = () => {
+      disposeEditor?.(); disposeEditor = undefined;
       resizeObserver?.disconnect(); resizeObserver = undefined;
-      document.querySelectorAll('[data-sift-column],[data-sift-resizer]').forEach(node => node.remove());
+      mountedCenter?.querySelectorAll('[data-sift-column],[data-sift-resizer],[data-sift-layout-toolbar]').forEach(node => node.remove());
       mountedCenter?.removeAttribute('data-sift-three-column');
       mountedCenter?.removeAttribute('data-chat-collapsed');
       mountedCenter?.style.removeProperty('--sift-w0'); mountedCenter?.style.removeProperty('--sift-w1'); mountedCenter?.style.removeProperty('--sift-w2');
+      mountedCenter?.style.removeProperty('--sift-g0'); mountedCenter?.style.removeProperty('--sift-g1');
       mountedCenter = null;
     };
     const toggle = (index: number) => { state.collapsed[index] = !state.collapsed[index]; applyState(); persist(); };
-    const addColumn = (center: Element, index: number, id: string, title: string, description: string) => {
+    const addColumn = (center: Element, id: string, title: string, description: string) => {
       const section = document.createElement('section');
       section.dataset.siftColumn = id;
-      section.innerHTML = `<header><strong>${title}</strong><button type="button" title="折叠${title}">‹</button><small>${description}</small></header><div>此处为能力接线占位。</div>`;
-      section.querySelector('button')!.addEventListener('click', () => toggle(index));
+      section.innerHTML = `<header><strong>${title}</strong><small>${description}</small></header><div>此处为能力接线占位。</div>`;
       center.appendChild(section);
+      return section;
+    };
+    const addToolbar = (center: Element) => {
+      const toolbar = document.createElement('nav');
+      toolbar.dataset.siftLayoutToolbar = '';
+      toolbar.setAttribute('aria-label', 'Sift 布局');
+      const tabs = document.createElement('div');
+      tabs.dataset.siftPanelTabs = '';
+      tabs.setAttribute('role', 'group');
+      tabs.setAttribute('aria-label', '显示的栏目');
+      ['素材', '产出', '对话'].forEach((label, index) => {
+        const button = document.createElement('button');
+        button.type = 'button'; button.textContent = label; button.dataset.siftPanelToggle = String(index);
+        button.addEventListener('click', () => toggle(index)); tabs.appendChild(button);
+      });
+      toolbar.appendChild(tabs);
+      const reset = document.createElement('button');
+      reset.type = 'button'; reset.textContent = '重置'; reset.dataset.action = 'reset';
+      reset.title = '显示全部栏目';
+      reset.addEventListener('click', () => { state.collapsed = [false, false, false]; applyState(); persist(); });
+      toolbar.appendChild(reset); center.appendChild(toolbar);
     };
     const addResizer = (center: Element, index: 0 | 1) => {
       const handle = document.createElement('div'); handle.dataset.siftResizer = String(index); handle.setAttribute('role', 'separator'); handle.tabIndex = 0;
@@ -244,14 +272,16 @@ export function apply(ctx: ClientContext): void {
     const showLayout = (workspaceId: string) => {
       const center = document.querySelector('[data-rightbar-col]')?.previousElementSibling as HTMLElement | null;
       if (!center) return;
+      if (mountedCenter === center && activeWorkspaceId === workspaceId) return;
       clearLayout();
       activeWorkspaceId = workspaceId; state = loadState(workspaceId);
       mountedCenter = center;
       center.setAttribute('data-sift-three-column', '');
-      addColumn(center, 0, 'materials', '素材', '工作区文件与参考关系'); addResizer(center, 0);
-      addColumn(center, 1, 'document', '产出', 'Markdown 阅读与编辑'); addResizer(center, 1);
-      const control = document.createElement('div'); control.dataset.siftColumn = 'conversation-control'; control.dataset.siftConversationControl = '';
-      const chatButton = document.createElement('button'); chatButton.dataset.siftChatToggle = ''; chatButton.addEventListener('click', () => toggle(2)); control.appendChild(chatButton); center.appendChild(control);
+      addToolbar(center);
+      addColumn(center, 'materials', '素材', '工作区文件与参考关系'); addResizer(center, 0);
+      const documentSection = addColumn(center, 'document', '产出', 'Markdown 阅读与编辑');
+      disposeEditor = mountDocumentEditor(documentSection, workspaceId);
+      addResizer(center, 1);
       resizeObserver = new ResizeObserver(entries => { if (entries.some(entry => entry.target === center)) applyState(); else window.dispatchEvent(new Event('resize')); });
       resizeObserver.observe(center); Array.from(center.children).forEach(child => resizeObserver!.observe(child)); applyState();
     };

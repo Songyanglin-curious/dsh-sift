@@ -33,6 +33,16 @@ export async function buildClient(outdir = resolve(root, 'dist')) {
     target: 'es2022',
     sourcemap: true,
     external: ['react', 'react/jsx-runtime'],
+    plugins: [{
+      name: 'inline-editor-css',
+      setup(plugin) {
+        plugin.onResolve({ filter: /\.css\?inline$/ }, args => ({ path: resolve(args.resolveDir, args.path.replace(/\?inline$/, '')), namespace: 'inline-css' }));
+        plugin.onLoad({ filter: /.*/, namespace: 'inline-css' }, async args => {
+          const result = await build({ entryPoints: [args.path], bundle: true, write: false, minify: true, loader: { '.woff': 'dataurl', '.woff2': 'dataurl', '.ttf': 'dataurl' } });
+          return { contents: `export default ${JSON.stringify(result.outputFiles[0].text)}`, loader: 'js' };
+        });
+      },
+    }],
     banner: {
       js: 'window.__ModuleLoader__.load({id:"@songyanglin/dsh-sift",factory:(require)=>{var module={exports:{}};var exports=module.exports;',
     },

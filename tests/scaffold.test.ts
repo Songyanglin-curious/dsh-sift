@@ -55,7 +55,8 @@ describe('Sift plugin scaffold', () => {
 describe('Workspace profile metadata', () => {
   it('fits expanded and collapsed columns while preserving minimum widths', () => {
     expect(fitLayout({ widths: [280, 480, 520], collapsed: [false, false, false] }, 1400).widths.reduce((sum, value) => sum + value, 0)).toBe(1388);
-    expect(fitLayout({ widths: [280, 480, 520], collapsed: [true, false, false] }, 1000)).toMatchObject({ collapsed: [true, false, false], widths: [44, expect.any(Number), expect.any(Number)] });
+    expect(fitLayout({ widths: [280, 480, 520], collapsed: [true, false, false] }, 1000)).toMatchObject({ collapsed: [true, false, false], widths: [0, expect.any(Number), expect.any(Number)] });
+    expect(fitLayout({ widths: [280, 480, 520], collapsed: [true, true, true] }, 1000).widths).toEqual([0, 0, 0]);
     expect(fitLayout({ widths: [10, 10, 10], collapsed: [false, false, false] }, 600).widths).toEqual([220, 320, 360]);
   });
 
