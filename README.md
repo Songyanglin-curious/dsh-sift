@@ -92,11 +92,7 @@ Sift 的关系数据保存在当前 `DSH_HOME/sift/catalog.json`。解决方案�
 
 当前开发环境要求：
 
-<<<<<<< HEAD
 - DSH `0.1.5-rc.2`
-=======
-- DSH `0.1.3-alpha.2` 源码版，并包含 Sift 所需的组合布局、发送扩展和会话工具约束接口
->>>>>>> 191153c63fd9b7f10c529e8b71abbfb8a984c5c0
 - Node.js 24 或更高版本
 - pnpm `11.25.0`
 

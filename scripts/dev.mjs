@@ -7,11 +7,7 @@ import { buildArtifacts, buildClient, buildHost, root } from './build.mjs';
 import { launchDsh, runDsh, stopChild } from './runtime/process.mjs';
 
 const PACKAGE_NAME = '@songyanglin/dsh-sift';
-<<<<<<< HEAD
 const DSH_VERSION = '0.1.5-rc.2';
-=======
-const DSH_SOURCE_VERSION = '0.1.3-alpha.2';
->>>>>>> 191153c63fd9b7f10c529e8b71abbfb8a984c5c0
 const action = process.argv[2] ?? 'start';
 export const home = resolve(process.env.SIFT_DEV_HOME ?? resolve(root, '.debug/development'));
 const profile = resolve(home, 'profiles/web');
@@ -47,10 +43,7 @@ export async function probe(path, config) {
 
 async function setup({ build = true } = {}) {
   const version = (await runDsh(['--version'], { env })).trim();
-  if (!process.env.SIFT_DSH_SOURCE) {
-    throw new Error('Sift 初版依赖尚未发布的 DSH 组合布局与发送扩展接口；请设置 SIFT_DSH_SOURCE 指向已应用配套改动的 DSH 源码目录。');
-  }
-  if (version !== DSH_SOURCE_VERSION) throw new Error(`源码集成基线需要 DSH ${DSH_SOURCE_VERSION}，当前 ${version}`);
+  if (version !== DSH_VERSION) throw new Error(`需要 DSH ${DSH_VERSION}，当前 ${version}`);
   await mkdir(profile, { recursive: true });
   await writeFile(resolve(profile, 'pnpm-workspace.yaml'), 'allowBuilds:\n  koffi: true\n  esbuild: true\n');
   if (build) await buildArtifacts();
