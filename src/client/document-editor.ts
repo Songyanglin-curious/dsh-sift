@@ -1,4 +1,5 @@
 import editorCss from './document-editor.css?inline';
+import { createMarkdownSurface } from './markdown-surface.js';
 
 interface LocalFileHandle {
   name: string;
@@ -70,16 +71,9 @@ export function mountDocumentEditor(section: HTMLElement, workspaceId: string): 
     root.replaceChildren();
     if (!current || disposed) return;
     const doc = current;
-    const { Crepe } = await import('@milkdown/crepe');
-    if (disposed) return;
-    editor = new Crepe({ root, defaultValue: doc.markdown,
-      features: { [Crepe.Feature.Latex]: false },
-      featureConfigs: { [Crepe.Feature.Placeholder]: { text: '开始写作，或粘贴 Markdown…' } },
-    });
-    editor.on(listener => listener.markdownUpdated(() => {
+    editor = await createMarkdownSurface(root, doc.markdown, { onChange: () => {
       if (!disposed && created) { capture(); renderStatus(); scheduleSave(); }
-    }));
-    await editor.create();
+    } });
     if (disposed) return;
     created = true;
     // Parsing may normalize Markdown. Opening a file alone must not mark it dirty.

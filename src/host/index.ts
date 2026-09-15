@@ -2,6 +2,7 @@ import type { Context } from '@deepseek-ai/cordis';
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { readMaterials, listMaterialFiles, mutateMaterials, readMaterial } from './materials.js';
 
 export const name = 'sift';
 
@@ -66,6 +67,22 @@ function isMissingFile(error: unknown): boolean {
 export class SiftService extends TypertRemoteService {
   static inject = ['workspaceRegistry'];
   private readonly registry: WorkspaceRegistry;
+  private workspacePath(id: string): string {
+    const workspace = this.registry.get(id);
+    if (!workspace) throw new Error('工作区不存在。');
+    return workspace.path;
+  }
+
+  @Remote
+  async getMaterials(input: { workspaceId: string }) { return readMaterials(this.workspacePath(input.workspaceId)); }
+  @Remote
+  async listMaterialFiles(input: { workspaceId: string; path: string }) { return listMaterialFiles(this.workspacePath(input.workspaceId), input.path); }
+  @Remote
+  async addMaterial(input: { workspaceId: string; kind: 'file' | 'url'; target: string }) { return mutateMaterials(this.workspacePath(input.workspaceId), input); }
+  @Remote
+  async removeMaterial(input: { workspaceId: string; id: string }) { return mutateMaterials(this.workspacePath(input.workspaceId), input); }
+  @Remote
+  async readMaterial(input: { workspaceId: string; id: string }) { return readMaterial(this.workspacePath(input.workspaceId), input.id); }
 
   constructor(ctx: SiftContext) {
     super(ctx, 'sift');

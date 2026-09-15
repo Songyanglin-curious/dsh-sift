@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
@@ -36,6 +37,8 @@ export async function buildClient(outdir = resolve(root, 'dist')) {
     plugins: [{
       name: 'inline-editor-css',
       setup(plugin) {
+        plugin.onResolve({ filter: /\?raw$/ }, args => ({ path: createRequire(import.meta.url).resolve(args.path.replace(/\?raw$/, '')), namespace: 'raw-text' }));
+        plugin.onLoad({ filter: /.*/, namespace: 'raw-text' }, async args => ({ contents: await readFile(args.path, 'utf8'), loader: 'text' }));
         plugin.onResolve({ filter: /\.css\?inline$/ }, args => ({ path: resolve(args.resolveDir, args.path.replace(/\?inline$/, '')), namespace: 'inline-css' }));
         plugin.onLoad({ filter: /.*/, namespace: 'inline-css' }, async args => {
           const result = await build({ entryPoints: [args.path], bundle: true, write: false, minify: true, loader: { '.woff': 'dataurl', '.woff2': 'dataurl', '.ttf': 'dataurl' } });

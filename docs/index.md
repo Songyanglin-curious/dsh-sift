@@ -1,5 +1,7 @@
 # 文档索引
 
+- [素材标签页与引用关系](materials-panel.md)：文件与网页引用维护、分类预览、持久化和验证边界。
+
 - [产出栏 Markdown 编辑器](markdown-editor.md)：Milkdown Crepe 接入、本地文件选择、保存和验证边界。
 
 - [Workspace 类型可行性调查](workspace-profile-feasibility.md)：DSH 0.1.5-rc.2 的工作区元信息、导航、布局扩展能力与实验结论。

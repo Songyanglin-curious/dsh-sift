@@ -4,7 +4,7 @@
 
 当前工作区配置为 `profile: sift` 且状态有效时，Client 保留原生 `main/conversation`，在它左侧组合“素材、产出”两栏，使页面右侧形成“素材｜产出｜原生对话”三栏；切换到缺少 Sift 配置的 default 工作区时，移除附加栏并恢复 DSH 原生页面。切换由当前 Session 与 Workspace 的原生关联驱动，异步返回会校验代次，旧工作区结果不能覆盖新选择。
 
-素材栏仍为接线占位；产出栏已接入 [Milkdown Crepe](markdown-editor.md)，提供本地 Markdown 文件选择、正文编辑和原文件保存。对话栏直接使用当前原生 Session 的完整界面，包括消息、输入框、模型、权限和其他会话插件。由于 DSH 0.1.5-rc.2 没有公开的 Conversation 包装插槽，当前接线通过版本内稳定的 `[data-rightbar-col]` 布局锚点定位 center column，在它内部追加两个兄弟栏并用 CSS Grid 将原生 Conversation 排到第三栏；没有复制或伪造聊天界面。升级 DSH 时必须把这处 DOM 契约列入兼容性验证。
+素材栏已接入[标签页与引用关系](materials-panel.md)，支持 Markdown、PDF、DOCX 和网页预览；产出栏已接入 [Milkdown Crepe](markdown-editor.md)，提供本地 Markdown 文件选择、正文编辑和原文件保存。对话栏直接使用当前原生 Session 的完整界面，包括消息、输入框、模型、权限和其他会话插件。由于 DSH 0.1.5-rc.2 没有公开的 Conversation 包装插槽，当前接线通过版本内稳定的 `[data-rightbar-col]` 布局锚点定位 center column，在它内部追加两个兄弟栏并用 CSS Grid 将原生 Conversation 排到第三栏；没有复制或伪造聊天界面。升级 DSH 时必须把这处 DOM 契约列入兼容性验证。
 
 ## 手工验证
 

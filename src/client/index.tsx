@@ -2,6 +2,8 @@ import { useEffect, useSyncExternalStore, useState, useRef } from 'react';
 import type { ComponentType } from 'react';
 import { TYPERT_REMOTE } from '../remote.js';
 import { mountDocumentEditor } from './document-editor.js';
+import { mountMaterialsPanel } from './materials-panel.js';
+import type { MaterialsApi } from '../materials.js';
 
 interface WorkspaceView { workspaceId: string; title: string; sessionIds: readonly string[] }
 interface WorkspaceSnapshot { items: readonly WorkspaceView[]; phase: 'pending' | 'ready' }
@@ -156,7 +158,7 @@ function installWorkspaceTypeCreator(ctx: ClientContext, setProfile: (input: { w
 export const inject = ['slots', 'workspaces', 'sessions', 'remote', 'uiWorkspace'];
 
 export function apply(ctx: ClientContext): void {
-  type MountedRemote = {
+  type MountedRemote = { [K in keyof MaterialsApi]: (input: Parameters<MaterialsApi[K]>[0]) => Promise<Awaited<ReturnType<MaterialsApi[K]>> | { ok: true; value: Awaited<ReturnType<MaterialsApi[K]>> }> } & {
     getWorkspaceProfile(input: { workspaceId: string }): Promise<ProfileResult | { ok: true; value: ProfileResult }>;
     setWorkspaceProfile(input: { workspaceId: string; profile: 'default' | 'sift' }): Promise<ProfileResult | { ok: true; value: ProfileResult }>;
   };
@@ -167,7 +169,14 @@ export function apply(ctx: ClientContext): void {
     if (!remote) throw new Error('Sift Remote 已挂载，但服务不可用。');
     return remote;
   })();
-  const unwrap = (result: ProfileResult | { ok: true; value: ProfileResult }) => 'ok' in result ? result.value : result;
+  const unwrap = <T extends object>(result: T | { ok: true; value: T }): T => 'ok' in result ? (result as { ok: true; value: T }).value : result;
+  const materialsApi: MaterialsApi = {
+    getMaterials: async input => unwrap(await (await mounted).getMaterials(input)),
+    listMaterialFiles: async input => unwrap(await (await mounted).listMaterialFiles(input)),
+    addMaterial: async input => unwrap(await (await mounted).addMaterial(input)),
+    removeMaterial: async input => unwrap(await (await mounted).removeMaterial(input)),
+    readMaterial: async input => unwrap(await (await mounted).readMaterial(input)),
+  };
   const remoteContext = { ...ctx, remote: { sift: {
     getWorkspaceProfile: async (input: { workspaceId: string }) => unwrap(await (await mounted).getWorkspaceProfile(input)),
     setWorkspaceProfile: async (input: { workspaceId: string; profile: 'default' | 'sift' }) => unwrap(await (await mounted).setWorkspaceProfile(input)),
@@ -191,6 +200,7 @@ export function apply(ctx: ClientContext): void {
     let state: LayoutState = structuredClone(DEFAULT_LAYOUT);
     let resizeObserver: ResizeObserver | undefined;
     let disposeEditor: (() => void) | undefined;
+    let disposeMaterials: (() => void) | undefined;
     const storageKey = (workspaceId: string) => `dsh-sift:layout:${workspaceId}`;
     const loadState = (workspaceId: string): LayoutState => {
       try {
@@ -220,6 +230,7 @@ export function apply(ctx: ClientContext): void {
       window.dispatchEvent(new Event('resize'));
     };
     const clearLayout = () => {
+      disposeMaterials?.(); disposeMaterials = undefined;
       disposeEditor?.(); disposeEditor = undefined;
       resizeObserver?.disconnect(); resizeObserver = undefined;
       mountedCenter?.querySelectorAll('[data-sift-column],[data-sift-resizer],[data-sift-layout-toolbar]').forEach(node => node.remove());
@@ -278,7 +289,9 @@ export function apply(ctx: ClientContext): void {
       mountedCenter = center;
       center.setAttribute('data-sift-three-column', '');
       addToolbar(center);
-      addColumn(center, 'materials', '素材', '工作区文件与参考关系'); addResizer(center, 0);
+      const materialsSection = addColumn(center, 'materials', '素材', '工作区文件与参考关系');
+      disposeMaterials = mountMaterialsPanel(materialsSection, workspaceId, materialsApi);
+      addResizer(center, 0);
       const documentSection = addColumn(center, 'document', '产出', 'Markdown 阅读与编辑');
       disposeEditor = mountDocumentEditor(documentSection, workspaceId);
       addResizer(center, 1);

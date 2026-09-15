@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { setupWorkspaceProfile } from '../workspace-profile.mjs';
 
-export const inject = ['workspaceRegistry'];
+export const inject = ['workspaceRegistry', 'connection'];
 
 export function apply(ctx) {
   const startedAt = new Date().toISOString();
@@ -10,6 +10,12 @@ export function apply(ctx) {
     if (!process.env.SIFT_DEV_TOKEN || req.headers.authorization !== `Bearer ${process.env.SIFT_DEV_TOKEN}`) {
       res.writeHead(401);
       res.end('{}');
+      return;
+    }
+    if (req.method === 'GET' && req.url === '/browser-url') {
+      res.setHeader('cache-control', 'no-store');
+      const port = Number(process.env.SIFT_DEV_PROBE_PORT) - 1;
+      res.end(JSON.stringify({ url: ctx.connection.authenticatedUrl(`http://127.0.0.1:${port}`) }));
       return;
     }
     if (req.method === 'POST' && req.url === '/workspace-profile/setup') {

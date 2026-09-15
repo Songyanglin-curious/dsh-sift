@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const home = resolve(root, '.debug/development');
+const home = resolve(process.env.SIFT_DEV_HOME ?? resolve(root, '.debug/development'));
 export const workspaceRoot = resolve(home, 'workspace-profile');
 export const defaultWorkspace = resolve(workspaceRoot, 'default');
 export const siftWorkspace = resolve(workspaceRoot, 'sift');
