@@ -12,8 +12,23 @@ export function dshEntry() {
   throw new Error('无法定位已安装 DSH。请设置 SIFT_DSH_ENTRY 指向 DSH 的 lib/bin.js。');
 }
 
+function dshInvocation(args) {
+  if (process.env.SIFT_DSH_SOURCE) {
+    const sourceRoot = resolve(process.env.SIFT_DSH_SOURCE);
+    const entry = resolve(sourceRoot, 'apps/cli/src/bin.ts');
+    if (!existsSync(entry)) throw new Error(`SIFT_DSH_SOURCE 不是有效的 DSH 源码目录：${sourceRoot}`);
+    return { args: ['--import', 'tsx/esm', entry, ...args], cwd: sourceRoot };
+  }
+  return { args: [dshEntry(), ...args], cwd: undefined };
+}
+
 export function launchDsh(args, options = {}) {
-  return spawn(process.execPath, [dshEntry(), ...args], { windowsHide: true, ...options });
+  const invocation = dshInvocation(args);
+  return spawn(process.execPath, invocation.args, {
+    windowsHide: true,
+    ...(invocation.cwd ? { cwd: invocation.cwd } : {}),
+    ...options,
+  });
 }
 
 export async function runPnpm(args, options = {}) {

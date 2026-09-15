@@ -73,13 +73,30 @@ Sift 将以 DSH 插件的形式实现，利用其 AI 能力和 Web 可视化基�
 
 ## 当前状态
 
-项目已经建立最小 DSH 插件与本地开发骨架，功能、数据结构与交互细节仍在探索中。当前界面只显示一个用于确认 Client 加载和热更新的 `Sift` 占位标记，不包含知识工作台业务能力。
+Sift 以 DSH 内的常驻知识工作台运行。它保留 DSH 首页和普通对话，在左侧导航提供 `Sift` 入口，并按“首页 → 解决方案 → 项目工作台”组织日常整理。项目工作台复用 DSH 原生消息流、输入框、模型与工具展示；Sift 不复制会话组件，也不维护第二套发送流程。
+
+Sift 的关系数据保存在当前 `DSH_HOME/sift/catalog.json`。解决方案显式关联一个 DSH 工作区，项目成果是工作区内的普通 `.md` 文件。素材、批注快照、项目会话、发送记录、工作现场和笔记修订历史均与成果文件分离；移除素材关系不会删除原文件。
+
+### 初版使用流程
+
+1. 从 DSH 左侧导航进入 Sift，创建解决方案并明确选择工作区。
+2. 创建项目；留空笔记路径会在工作区 `.sift/projects/<project-id>/note.md` 生成成果，也可选择工作区内已有 Markdown。
+3. 在解决方案共享库或项目中添加文件、URL、粘贴文本，并将共享素材复用到项目。
+4. 在素材、成果笔记或原生对话中选择文字并写批注。
+5. 在原生输入框下的“批注 · 数量”中勾选记录并核对发送预览，然后仍使用 DSH 原生发送按钮。
+6. 明确要求 AI 修改成果后，项目会话通过受限的 Sift 笔记工具直接写回；在修改历史中查看差异或按版本回退。
+
+初版阅读器包括 Milkdown/CodeMirror Markdown、文本层 PDF.js、docx-preview 和 Readability 网页正文。不包含旧 `.doc` 转换、扫描 PDF OCR、登录网页抓取或 Office 高保真编辑。
 
 ## 本地开发
 
 当前开发环境要求：
 
+<<<<<<< HEAD
 - DSH `0.1.5-rc.2`
+=======
+- DSH `0.1.3-alpha.2` 源码版，并包含 Sift 所需的组合布局、发送扩展和会话工具约束接口
+>>>>>>> 191153c63fd9b7f10c529e8b71abbfb8a984c5c0
 - Node.js 24 或更高版本
 - pnpm `11.25.0`
 
@@ -95,13 +112,14 @@ pnpm build
 日常开发使用仓库内独立的 `.debug/development` 作为 `DSH_HOME`，通过 `link:` 加载当前源码，不修改正式 DSH Home 或 Profile：
 
 ```powershell
+$env:SIFT_DSH_SOURCE = 'D:\mycode\deepseek-harness'
 pnpm dev:setup
 pnpm dev
 pnpm dev:status
 pnpm dev:clean
 ```
 
-开发 Web 默认地址为 `http://127.0.0.1:9082`。可以通过 `SIFT_DEV_PORT` 修改端口；如果无法自动定位 DSH，可以通过 `SIFT_DSH_ENTRY` 指向 DSH 的 `lib/bin.js`。
+开发 Web 默认地址为 `http://127.0.0.1:9082`，可以通过 `SIFT_DEV_PORT` 修改端口。当前必需接口尚未进入已发布 DSH 包，开发脚本会校验 `SIFT_DSH_SOURCE` 与源码版本；旧 DSH 只显示升级提示，不退回旧弹窗方案。
 
 开发期间，Client 修改会重新构建并交给 DSH Client HMR；Host、Bundle patch 或依赖修改会触发受控重启。
 
@@ -110,3 +128,5 @@ pnpm dev:clean
 ```powershell
 pnpm verify:package
 ```
+
+更多细节见[文档索引](docs/index.md)。本仓库开发不执行 npm 发布或 Git 推送。
