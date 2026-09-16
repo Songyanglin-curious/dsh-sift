@@ -2,9 +2,8 @@ import { useEffect, useSyncExternalStore, useState, useRef } from 'react';
 import type { ComponentType } from 'react';
 import { TYPERT_REMOTE } from '../remote.js';
 import type { DocumentsApi } from '../documents.js';
-import type { SourcesApi } from '../sources.js';
 import { mountDocumentEditor } from './document-editor.js';
-import { registerInputTriggerSource, type InputTriggerServiceContract } from './dsh-adapter/input-trigger.js';
+import { type InputTriggerServiceContract } from './dsh-adapter/input-trigger.js';
 import { mountThreeColumn, type ColumnSpec } from './dsh-adapter/layout.js';
 import { findConversationCenter } from './dsh-adapter/selectors.js';
 import {
@@ -17,9 +16,6 @@ import {
     type WorkspaceSnapshot,
     type WorkspaceView,
 } from './dsh-adapter/workspace-entry.js';
-import { mountReferencePanel } from './reference/panel.js';
-import { createSiftReferenceSource } from './reference/source.js';
-import type { SiftReferenceRecord } from './reference/codec.js';
 
 interface Source<T> { getSnapshot(): T; subscribe(listener: () => void): () => void }
 
@@ -30,14 +26,6 @@ interface SiftRemote {
     saveDocument: DocumentsApi['saveDocument'];
     readDocumentContent: DocumentsApi['readDocumentContent'];
     removeDocument: DocumentsApi['removeDocument'];
-    listSources: SourcesApi['listSources'];
-    addSource: SourcesApi['addSource'];
-    addExternalFiles: SourcesApi['addExternalFiles'];
-    pickSourceFiles: SourcesApi['pickSourceFiles'];
-    removeSource: SourcesApi['removeSource'];
-    createSourceFile: SourcesApi['createSourceFile'];
-    browseWorkspace: SourcesApi['browseWorkspace'];
-    browseExternal: SourcesApi['browseExternal'];
 }
 
 interface ClientContext {
@@ -51,17 +39,6 @@ interface ClientContext {
     effect?(factory: () => () => void | Promise<void>, label?: string): unknown
     startupError?: string
 }
-
-/**
- * Phase 0 spike：硬编码三条参考，只用于验证
- * `@参考` → chip → codec.serialize → 模型收到正文 这条通道。
- * Phase 5 接入真正的 Reference Board 后整体删除。
- */
-const SPIKE_RECORDS: readonly SiftReferenceRecord[] = [
-    { id: 'R1', label: 'Workspace 与实际目录绑定', content: 'Workspace 注册的是已有目录，不复制文件。', sourceTitle: 'architecture.md', locator: 'L120-L150' },
-    { id: 'R2', label: '相同路径复用已有 Workspace', content: '同一规范化路径只会有一条 Workspace 记录。', sourceTitle: 'workspace.ts', locator: 'L42' },
-    { id: 'R3', label: '删除 Workspace 不删除目录', content: '移除登记关系不会触碰磁盘上的目录。', sourceTitle: 'workspace.ts', locator: 'L88' },
-];
 
 /** Sift 三栏：左 Reference Board、中 Document、右原生对话。 */
 const SIFT_COLUMNS: readonly [ColumnSpec, ColumnSpec] = [
@@ -131,16 +108,6 @@ export function apply(ctx: ClientContext): void {
         readDocumentContent: async input => unwrap(await (await mounted).readDocumentContent(input)),
         removeDocument: async input => unwrap(await (await mounted).removeDocument(input)),
     };
-    const sourcesApi: SourcesApi = {
-        listSources: async input => unwrap(await (await mounted).listSources(input)),
-        addSource: async input => unwrap(await (await mounted).addSource(input)),
-        addExternalFiles: async input => unwrap(await (await mounted).addExternalFiles({ workspaceId: input.workspaceId, paths: [...input.paths] })),
-        pickSourceFiles: async input => unwrap(await (await mounted).pickSourceFiles(input)),
-        removeSource: async input => unwrap(await (await mounted).removeSource(input)),
-        createSourceFile: async input => unwrap(await (await mounted).createSourceFile(input)),
-        browseWorkspace: async input => unwrap(await (await mounted).browseWorkspace(input)),
-        browseExternal: async input => unwrap(await (await mounted).browseExternal(input)),
-    };
     const siftRemote = {
         getWorkspaceProfile: async (input: { workspaceId: string }) => unwrap(await (await mounted).getWorkspaceProfile(input)),
         setWorkspaceProfile: async (input: { workspaceId: string; profile: 'default' | 'sift' }) => unwrap(await (await mounted).setWorkspaceProfile(input)),
@@ -152,12 +119,6 @@ export function apply(ctx: ClientContext): void {
 
     //侧边下方插槽展示当前的工作区是哪个以及类型
     ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({ name: 'sidebar.footer.action', id: 'sift-workspace-profile', order: 90 }, () => <WorkspaceProfileBadge ctx={remoteContext} />));
-    if (ctx.inputTriggers) {
-        registerInputTriggerSource(
-            { inputTriggers: ctx.inputTriggers, effect: ctx.effect },
-            createSiftReferenceSource(() => SPIKE_RECORDS),
-        );
-    }
     if (typeof document === 'undefined') return;
 
     const disposeCreator = installWorkspaceTypeCreator(ctx, input => remoteContext.remote.sift!.setWorkspaceProfile(input));
@@ -192,11 +153,12 @@ export function apply(ctx: ClientContext): void {
             columns: SIFT_COLUMNS,
             storageKey: layoutStorageKey(workspace.workspaceId),
             mount: (id, section) => id === 'reference'
-                ? mountReferencePanel(section, {
-                    workspaceId: workspace.workspaceId,
-                    sources: sourcesApi,
-                    ...(ctx.uiWorkspace?.pickDirectory === undefined ? {} : { pickDirectory: () => ctx.uiWorkspace!.pickDirectory() }),
-                })
+                ? (() => {
+                    const p = document.createElement('p');
+                    p.textContent = '参考面板（待实现）';
+                    section.appendChild(p);
+                    return () => { p.remove(); };
+                })()
                 : mountDocumentEditor(section, { workspaceId: workspace.workspaceId, api: documentsApi }),
         });
     };

@@ -16,6 +16,7 @@
 - [2026-09-16 14:09] [工作记录] commit 8d7b895：弹窗样式与透明点击层接管已提交；git push 待用户手动 — 本轮实施结果已提交 commit 8d7b895（弹窗 CSS + 透明点击层接管 + 6 个测试）。git push 因 SSH 子进程被 DSH 沙箱 EPERM 拦截，需用户手动推（git push origin main）。提交时排除了非本轮的 scripts/dev.mjs/process.mjs 改动（已有的 inspector 调试支持，不应混入）。
 - [2026-09-16 14:31] [工作记录] 接入 DSH Modal：代码完成 tsc 通过，构建因包未安装受阻 — 实现完成但构建受阻：1) 新建 src/client/workspace-creator.tsx——使用 DSH Modal（@deepseek-ai/dsh-client-ui-primitives）替代手搓弹窗，createRoot 挂载 CreatorModal 组件，捕获阶段 click 拦截逻辑保持不变；2) index.tsx 导入并重导出，移除旧 creatorCss 导入，删除 workspace-creator.css；3) 添加 @deepseek-ai/dsh-client-ui-primitives 类型声明到 styles.d.ts；4) package.json inject 与 build.mjs external 已更新；5) 测试已更新（mock Modal，6 用例）；6) tsc --noEmit 通过。阻碍：@deepseek-ai/dsh-client-ui-primitives 未安装在项目 node_modules 中，esbuild 解析失败导致 watcher 构建静默失败——需要用户宿主机运行 pnpm add -D @deepseek-ai/dsh-client-ui-primitives@0.1.5-rc.2 后方可重建产物。
 - [2026-09-16 14:46] [工作记录] 修复 sidebar.footer.action Badge React #185 崩溃 — 修复 WorkspaceProfileBadge 侧边栏 Badge 全链路：1) React #185 无限重渲染崩溃——emptyWorkspaces/emptySessions 改为模块级常量（已确认崩溃消除）；2) Badge 始终显示"未选择工作区"——{...ctx} spread 丢失 Cordis 响应式服务，改为 Object.create(ctx, { remote: { value: { sift: ... } } }) 保留原型链。tsc 通过。用户实机已验证 Badge 正常工作。
+- [2026-09-16 15:41] [工作记录] Reference 模块现状与待实现链路梳理 — 完整梳理参考模块四层：1) 数据壳——SPIKE_RECORDS 硬编码三条（待 Phase 5 删除），Reference Board 传 cards:[]；2) 视图——board.ts 空状态+卡片渲染、panel.ts 左栏拼装、source/drawer.ts 四种来源管理（工作正常，onSelectionChange 回调无人接）；3) 聊天输入集成——source.ts @输入触发器、codec.ts 两种投影、input-trigger.ts DSH 适配（已实现）；4) Host 端——source/store.ts 读写 Source 索引。关键断链：Source Drawer 选中来源后未流入 Reference Board。待实现：Phase 4 整份加入参考（读取文件内容→生成卡片）或 Phase 7 AI 提取参考。
 
 ## 经验教训 Lessons Learned
 
@@ -35,3 +36,4 @@
 
 - [2026-09-16 11:18] [行动指南] 下一步：Plan 模式制定 v0.2 Phase 1 重新实施计划 — 从 6add38e 起点开始重新实现 v0.2。下一轮切换到 Plan 模式后，按实施文档 §45 制定 Phase 1 计划：Workspace Profile 识别 + dsh-adapter 拆为四个文件 + 三栏布局（参考|文档|对话）+ Untitled Document。用户需先在终端手动执行 git push --force origin main 更新远程。
 - [2026-09-16 13:28] [行动指南] 浏览器实机验证 client 半边渲染 — 待办：1) 宿主机执行 node scripts/build.mjs 完成重建（dist 仍是旧产物含 creatorCss，新代码已不含），或删 dist/client/ 后重启 pnpm dev；2) 重建后刷新 9082 验证 Modal 弹出与类型选择；3) 创建 sift 工作区验证三栏；4) 宿主机 pnpm test；5) 用户 git push origin main；6) 定位 #185。菜单"添加工作区…"链路未接管，另立任务。此前"Plan 模式制定 v0.2 Phase 1 重新实施计划"行动仍然有效。
+- [2026-09-16 15:47] [行动指南] 清除参考模块与 Source Drawer 重新实现 — 已清除参考模块和 Source Drawer 全部代码。删除 7 个文件（src/client/reference/ 5 文件、src/client/source/ 2 文件），恢复 src/sources.ts（Host 端依赖）。清理 src/client/index.tsx 中 10 处引用/数据/调用。tsc 通过。左栏现显示占位文本"参考面板（待实现）"，后续重新设计参考模块架构。
