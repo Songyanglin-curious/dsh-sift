@@ -1,0 +1,144 @@
+/* Sift 三栏布局样式。所有选择器都以 data-sift-* 命名，避免与 DSH 原生样式冲突。
+   布局契约的 DOM 假设集中在 dsh-adapter/selectors.ts 与 dsh-adapter/layout.ts。 */
+
+[data-sift-three-column] {
+  position: relative;
+  display: grid !important;
+  grid-template-columns: var(--sift-w0) var(--sift-g0) var(--sift-w1) var(--sift-g1) var(--sift-w2) !important;
+  grid-template-rows: 36px minmax(0, 1fr) !important;
+  overflow: auto !important;
+}
+
+[data-sift-layout-toolbar] {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 36px;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 10px;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--dsw-alias-border-l4, #e5e7eb);
+  background: var(--dsw-alias-bg-base, #fff);
+}
+
+[data-sift-panel-tabs] {
+  display: flex;
+  align-items: center;
+  height: 26px;
+  padding: 2px;
+  border: 1px solid var(--dsw-alias-border-l4, #e5e7eb);
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+[data-sift-layout-toolbar] button {
+  height: 22px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary, #8b919a);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+[data-sift-layout-toolbar] button:hover {
+  background: var(--dsw-alias-bg-raised, #f4f5f6);
+  color: var(--dsw-alias-label-primary, #111827);
+}
+
+[data-sift-layout-toolbar] button[aria-pressed='true'] {
+  background: var(--dsw-alias-bg-raised, #f1f2f3);
+  color: var(--dsw-alias-label-primary, #111827);
+  font-weight: 500;
+}
+
+[data-sift-layout-toolbar] [data-action='reset'] {
+  margin-left: auto;
+}
+
+[data-sift-three-column] > [data-sift-column='reference'] { grid-column: 1; }
+[data-sift-three-column] > [data-sift-resizer='0'] { grid-column: 2; }
+[data-sift-three-column] > [data-sift-column='document'] { grid-column: 3; }
+[data-sift-three-column] > [data-sift-resizer='1'] { grid-column: 4; }
+
+[data-sift-three-column] > [data-slot='main'] {
+  display: block !important;
+  grid-column: 5;
+  grid-row: 2;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+[data-sift-three-column] > [data-slot='main'] > [data-slot='main.conversation'] {
+  display: block !important;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+[data-sift-column] {
+  grid-row: 2;
+  min-width: 0;
+  overflow: auto;
+  border-right: 1px solid var(--dsw-alias-border-l4, #e5e7eb);
+  background: var(--dsw-alias-bg-base, #fff);
+  color: var(--dsw-alias-label-primary, #111827);
+}
+
+[data-sift-column] > header {
+  padding: 12px;
+  min-height: 68px;
+  border-bottom: 1px solid var(--dsw-alias-border-l4, #e5e7eb);
+  display: grid;
+  gap: 4px;
+  box-sizing: border-box;
+}
+
+[data-sift-column] > header > small,
+[data-sift-column] > div {
+  color: var(--dsw-alias-label-tertiary, #9ca3af);
+  font-size: 12px;
+}
+
+[data-sift-column] > div {
+  padding: 16px;
+  font-size: 13px;
+}
+
+[data-sift-column][data-collapsed] {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+[data-sift-resizer] {
+  grid-row: 2;
+  position: relative;
+  cursor: col-resize;
+  background: transparent;
+  touch-action: none;
+  z-index: 4;
+}
+
+[data-sift-resizer]::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background: var(--dsw-alias-border-l4, #e5e7eb);
+}
+
+[data-sift-resizer]:hover::after,
+[data-sift-resizer][data-dragging]::after {
+  background: var(--dsw-alias-label-tertiary, #8b919a);
+}
+
+[data-sift-three-column][data-chat-collapsed] > [data-slot='main'] {
+  visibility: hidden;
+  pointer-events: none;
+}

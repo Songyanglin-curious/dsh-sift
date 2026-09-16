@@ -1,7 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { apply as applyClient, createLatestProfileReader, fitLayout, inject } from '../src/client/index.js';
+import { apply as applyClient, inject } from '../src/client/index.js';
+import { fitLayout } from '../src/client/dsh-adapter/layout.js';
+import { createLatestProfileReader } from '../src/client/dsh-adapter/workspace-entry.js';
 import { name, readWorkspaceProfile, SiftService, writeWorkspaceProfile } from '../src/host/index.js';
 
 const root = resolve(import.meta.dirname, '..');
@@ -9,7 +11,7 @@ const root = resolve(import.meta.dirname, '..');
 describe('Sift plugin scaffold', () => {
   it('exports the workspace-profile Host service', () => {
     expect(name).toBe('sift');
-    expect(SiftService.inject).toEqual(['workspaceRegistry']);
+    expect(SiftService.inject).toEqual(['workspaceRegistry', 'tools']);
   });
 
   it('registers one disposable Client workspace profile marker', async () => {
@@ -31,7 +33,7 @@ describe('Sift plugin scaffold', () => {
       effect,
       get: () => ({ getWorkspaceProfile: vi.fn() }),
     });
-    expect(inject).toEqual(['slots', 'workspaces', 'sessions', 'remote', 'uiWorkspace']);
+    expect(inject).toEqual(['slots', 'workspaces', 'sessions', 'remote', 'uiWorkspace', 'inputTriggers']);
     expect(slots.inject).toHaveBeenCalledWith('sidebar.footer.action', expect.any(Function));
     expect(registrations.map((entry: any) => entry.options)).toEqual([
       { name: 'sidebar.footer.action', id: 'sift-workspace-profile', order: 90 },
@@ -51,6 +53,21 @@ describe('Sift plugin scaffold', () => {
     expect(manifest.files).toEqual(['dist', 'cordis.patch.yml', 'README.md', 'LICENSE']);
     expect(patch).toContain("name: '@songyanglin/dsh-sift'");
     expect(combined).not.toContain('apb');
+  });
+
+  it('为每个客户端会调用的 Remote 方法都声明了描述符', async () => {
+    const { descriptors } = await import('../src/remote.js');
+    const methods = descriptors.map(descriptor => descriptor.method).sort();
+    // 少一个描述符，客户端调用就会在运行期失败，所以在这里钉住。
+    expect(methods).toEqual([
+      'addExternalFiles', 'addMaterial', 'addSource', 'browseExternal', 'browseWorkspace', 'createSourceFile',
+      'getMaterials', 'getWorkspaceProfile', 'listDocuments', 'listMaterialFiles', 'listSources', 'pickSourceFiles',
+      'readDocumentContent', 'readMaterial', 'removeDocument', 'removeMaterial', 'removeSource', 'saveDocument', 'setWorkspaceProfile',
+    ]);
+    for (const descriptor of descriptors) {
+      expect(descriptor.service).toBe('sift');
+      expect(descriptor.namespace).toBe('sift');
+    }
   });
 });
 

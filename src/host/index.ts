@@ -3,6 +3,24 @@ import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { readMaterials, listMaterialFiles, mutateMaterials, readMaterial } from './materials.js';
+import { createDocumentChangeStore, createDocumentChangeTool } from './document/change-tool.js';
+import {
+  readDocumentIndex,
+  readDocumentText,
+  removeDocument as unregisterDocument,
+  saveDocument as saveDocumentFile,
+} from './document/store.js';
+import {
+  addExternalFiles as addExternalFileRecords,
+  addSource as addSourceRecord,
+  browseExternal as browseExternalEntries,
+  browseWorkspace as browseWorkspaceEntries,
+  createSourceFile as createSourceFileRecord,
+  readSourceIndex,
+  removeSource as removeSourceRecord,
+} from './source/store.js';
+import { FileDialogUnsupportedError, pickFiles } from './source/file-dialog.js';
+import type { ToolRuntimeContract } from './tools/contract.js';
 
 export const name = 'sift';
 
@@ -27,6 +45,7 @@ interface WorkspaceRegistry {
 
 interface SiftContext extends Context {
   workspaceRegistry: WorkspaceRegistry;
+  tools: ToolRuntimeContract;
 }
 
 export async function readWorkspaceProfile(workspace: WorkspaceRecord): Promise<WorkspaceProfileResult> {
@@ -65,8 +84,10 @@ function isMissingFile(error: unknown): boolean {
 }
 
 export class SiftService extends TypertRemoteService {
-  static inject = ['workspaceRegistry'];
+  static inject = ['workspaceRegistry', 'tools'];
   private readonly registry: WorkspaceRegistry;
+  /** Phase 8 之前，待确认的 Document 修改提案先只存在内存里。 */
+  private readonly documentChanges = createDocumentChangeStore();
   private workspacePath(id: string): string {
     const workspace = this.registry.get(id);
     if (!workspace) throw new Error('工作区不存在。');
@@ -84,10 +105,93 @@ export class SiftService extends TypertRemoteService {
   @Remote
   async readMaterial(input: { workspaceId: string; id: string }) { return readMaterial(this.workspacePath(input.workspaceId), input.id); }
 
+  @Remote
+  async listDocuments(input: { workspaceId: string }) { return readDocumentIndex(this.workspacePath(input.workspaceId)); }
+
+  @Remote
+  async saveDocument(input: { workspaceId: string; documentId: string; title?: string; content: string }) {
+    const root = this.workspacePath(input.workspaceId);
+    return saveDocumentFile(root, {
+      id: input.documentId,
+      ...(input.title === undefined ? {} : { title: input.title }),
+      content: input.content,
+    });
+  }
+
+  @Remote
+  async readDocumentContent(input: { workspaceId: string; documentId: string }) {
+    const root = this.workspacePath(input.workspaceId);
+    const index = await readDocumentIndex(root);
+    const document = index.documents.find(item => item.id === input.documentId);
+    if (!document?.path) throw new Error('Document 不存在或尚未保存。');
+    return { content: await readDocumentText(root, document.path), path: document.path };
+  }
+
+  /** 只解除登记，不删除磁盘文件（实施文档 §30）。 */
+  @Remote
+  async removeDocument(input: { workspaceId: string; documentId: string }) {
+    return unregisterDocument(this.workspacePath(input.workspaceId), input.documentId);
+  }
+
+  @Remote
+  async listSources(input: { workspaceId: string }) { return readSourceIndex(this.workspacePath(input.workspaceId)); }
+
+  @Remote
+  async addSource(input: { workspaceId: string; type: 'file' | 'url'; location?: 'workspace' | 'external'; target: string; title?: string }) {
+    const root = this.workspacePath(input.workspaceId);
+    return addSourceRecord(root, {
+      type: input.type,
+      ...(input.location === undefined ? {} : { location: input.location }),
+      target: input.target,
+      ...(input.title === undefined ? {} : { title: input.title }),
+    });
+  }
+
+  /** 只解除登记，不删除来源文件本身。 */
+  @Remote
+  async removeSource(input: { workspaceId: string; id: string }) {
+    return removeSourceRecord(this.workspacePath(input.workspaceId), input.id);
+  }
+
+  /** 原生多选文件对话框的结果一次性登记为本机来源。 */
+  @Remote
+  async addExternalFiles(input: { workspaceId: string; paths: string[] }) {
+    return addExternalFileRecords(this.workspacePath(input.workspaceId), input.paths);
+  }
+
+  /**
+   * 打开系统文件选择对话框（多选）。
+   * 平台不支持或对话框打不开时抛出可读错误，客户端据此回落到目录浏览。
+   */
+  @Remote
+  async pickSourceFiles() {
+    try {
+      return await pickFiles({ title: 'Sift：选择来源文件' });
+    } catch (error) {
+      if (error instanceof FileDialogUnsupportedError) return { paths: [], cancelled: true, message: error.message };
+      throw error;
+    }
+  }
+
+  @Remote
+  async createSourceFile(input: { workspaceId: string; name: string; content: string }) {
+    return createSourceFileRecord(this.workspacePath(input.workspaceId), { name: input.name, content: input.content });
+  }
+
+  @Remote
+  async browseWorkspace(input: { workspaceId: string; path: string }) {
+    return browseWorkspaceEntries(this.workspacePath(input.workspaceId), input.path);
+  }
+
+  @Remote
+  async browseExternal(input: { path: string }) { return browseExternalEntries(input.path); }
+
   constructor(ctx: SiftContext) {
     super(ctx, 'sift');
     this.registry = ctx.workspaceRegistry;
-    ctx.logger.info('Sift 插件已加载11。');
+    // 注册即返回精确 disposer，随本 ctx 卸载自动回收，无需再包一层 effect。
+    ctx.tools.register(createDocumentChangeTool(this.documentChanges));
+    ctx.logger.info('Sift 插件已加载。');
     ctx.effect(() => () => ctx.logger.info('Sift 插件已卸载。'));
   }
 

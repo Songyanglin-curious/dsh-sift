@@ -1,13 +1,115 @@
 @import '@milkdown/crepe/theme/common/style.css';
 @import '@milkdown/crepe/theme/classic.css';
 
-[data-sift-column=document] { min-height: 0; }
-[data-sift-column=document] > header { position: sticky; top: 0; z-index: 5; background: var(--dsw-alias-bg-base, #fff); min-height: 44px; padding: 6px 12px; gap: 2px; }
-[data-sift-column=document] > header [data-sift-file-location] { display: block; width: 100%; min-width: 0; padding: 6px 8px; border: 0; border-radius: 5px; background: transparent; color: inherit; cursor: pointer; text-align: left; font: inherit; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-[data-sift-column=document] > header [data-sift-file-location]:hover { background: var(--dsw-alias-bg-raised, #f4f5f6); }
-[data-sift-column=document] > header [role=status] { padding: 0 8px; }
-[data-sift-column=document] > header button:disabled { opacity: .5; cursor: default; }
-[data-sift-column=document] > [data-sift-editor] { padding: 0; color: var(--dsw-alias-label-primary, #111827); font-size: 15px; }
+/* Document 栏：上面是标题/保存/路径，下面是正文编辑器。
+   与布局样式的顺序约定：layout.css 先注入，本文件后注入，因此同优先级的覆盖成立。 */
+
+[data-sift-column='document'] {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+[data-sift-column='document'] > header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    'title save status'
+    'path  path path';
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 2px;
+  min-height: 0;
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid var(--dsw-alias-border-l4, #e5e7eb);
+  background: var(--dsw-alias-bg-base, #fff);
+}
+
+[data-sift-document-title] {
+  grid-area: title;
+  min-width: 0;
+  width: 100%;
+  margin: 0;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary, #111827);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+}
+
+[data-sift-document-title]::placeholder {
+  color: var(--dsw-alias-label-quaternary, #b6bcc5);
+  font-weight: 500;
+}
+
+[data-sift-document-title]:hover:not(:disabled) {
+  background: var(--dsw-alias-bg-raised, #f4f5f6);
+}
+
+[data-sift-document-title]:focus {
+  outline: 2px solid var(--dsw-alias-brand-primary, #5085dc);
+  outline-offset: -1px;
+  background: var(--dsw-alias-bg-base, #fff);
+}
+
+[data-sift-document-save] {
+  grid-area: save;
+  padding: 4px 12px;
+  border: 1px solid var(--dsw-alias-brand-primary, #5085dc);
+  border-radius: 6px;
+  background: var(--dsw-alias-brand-primary, #5085dc);
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+[data-sift-document-save]:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+[data-sift-document-save]:disabled {
+  opacity: .5;
+  cursor: default;
+}
+
+[data-sift-column='document'] > header [role='status'] {
+  grid-area: status;
+  padding: 0;
+  color: var(--dsw-alias-label-tertiary, #8b919a);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+[data-sift-document-path] {
+  grid-area: path;
+  min-width: 0;
+  padding: 0 6px;
+  color: var(--dsw-alias-label-quaternary, #9ca3af);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-sift-column='document'] > [data-sift-editor] {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0;
+  color: var(--dsw-alias-label-primary, #111827);
+  font-size: 15px;
+}
+
 [data-sift-editor] .milkdown {
   --crepe-color-background: var(--dsw-alias-bg-base, #fff);
   --crepe-color-on-background: var(--dsw-alias-label-primary, #111827);
@@ -20,4 +122,9 @@
   --crepe-font-default: system-ui, sans-serif;
   --crepe-font-title: system-ui, sans-serif;
 }
-[data-sift-editor] .milkdown .ProseMirror { padding: 24px 32px 80px; min-height: 300px; overflow-wrap: anywhere; }
+
+[data-sift-editor] .milkdown .ProseMirror {
+  padding: 24px 32px 80px;
+  min-height: 300px;
+  overflow-wrap: anywhere;
+}
