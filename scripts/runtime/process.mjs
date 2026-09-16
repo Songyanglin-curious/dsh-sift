@@ -22,9 +22,11 @@ function dshInvocation(args) {
   return { args: [dshEntry(), ...args], cwd: undefined };
 }
 
-export function launchDsh(args, options = {}) {
+export function launchDsh(args, { inspectPort, ...options } = {}) {
   const invocation = dshInvocation(args);
-  return spawn(process.execPath, invocation.args, {
+  // 传入 inspectPort 时在 node 入口前插入 --inspect，供 VS Code 附加调试
+  const inspectArgs = inspectPort ? [`--inspect=${inspectPort}`] : [];
+  return spawn(process.execPath, [...inspectArgs, ...invocation.args], {
     windowsHide: true,
     ...(invocation.cwd ? { cwd: invocation.cwd } : {}),
     ...options,

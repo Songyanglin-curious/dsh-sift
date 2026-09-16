@@ -33,7 +33,7 @@ export async function buildClient(outdir = resolve(root, 'dist')) {
     format: 'cjs',
     target: 'es2022',
     sourcemap: true,
-    external: ['react', 'react/jsx-runtime'],
+    external: ['react', 'react/jsx-runtime', 'react-dom', 'react-dom/client', '@deepseek-ai/dsh-client-ui-primitives'],
     plugins: [{
       name: 'inline-editor-css',
       setup(plugin) {

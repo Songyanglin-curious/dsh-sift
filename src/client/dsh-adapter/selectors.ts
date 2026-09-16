@@ -43,6 +43,11 @@ export function findSlotConversation(center: HTMLElement): HTMLElement | null {
   return center.querySelector<HTMLElement>(SLOT_CONVERSATION);
 }
 
+/** 判断元素是否为原生"添加工作区"按钮。 */
+export function isWorkspaceAddButton(element: HTMLElement | null): boolean {
+  return element?.matches?.(WORKSPACE_ADD_BUTTON) === true;
+}
+
 export function findWorkspaceAddButton(): HTMLButtonElement | null {
   return document.querySelector<HTMLButtonElement>(WORKSPACE_ADD_BUTTON);
 }

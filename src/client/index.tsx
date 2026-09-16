@@ -4,10 +4,9 @@ import { TYPERT_REMOTE } from '../remote.js';
 import type { DocumentsApi } from '../documents.js';
 import type { SourcesApi } from '../sources.js';
 import { mountDocumentEditor } from './document-editor.js';
-import creatorCss from './workspace-creator.css?inline';
 import { registerInputTriggerSource, type InputTriggerServiceContract } from './dsh-adapter/input-trigger.js';
 import { mountThreeColumn, type ColumnSpec } from './dsh-adapter/layout.js';
-import { findConversationCenter, findWorkspaceAddButton } from './dsh-adapter/selectors.js';
+import { findConversationCenter } from './dsh-adapter/selectors.js';
 import {
   createLatestProfileReader,
   layoutStorageKey,
@@ -110,132 +109,8 @@ function WorkspaceProfileBadge({ ctx }: { ctx: ClientContext }) {
   return <span data-dsh-sift-profile={result?.status === 'invalid' ? 'invalid' : result?.profile ?? 'default'} title={result?.message}>{workspace.title} · {result?.profile ?? 'default'}{result?.message ? `（${result.message}）` : ''}</span>;
 }
 
-/**
- * 工作区类型选择入口的接管。
- *
- * 不修改、不移动原生"添加工作区"按钮（克隆插入曾造成按钮位移并与 React
- * 重渲染冲突）：在按钮正上方覆盖一个同尺寸的透明点击层（fixed 定位，
- * JS 实时同步按钮矩形）承接点击与回车/空格，再弹出类型选择对话框。
- * 原生按钮保持原位，布局零影响。
- */
-export function installWorkspaceTypeCreator(ctx: ClientContext, setProfile: (input: { workspaceId: string; profile: 'default' | 'sift' }) => Promise<ProfileResult>): () => void {
-  let nativeButton: HTMLButtonElement | undefined;
-  let layer: HTMLDivElement | undefined;
-  let overlay: HTMLElement | undefined;
-  /** 弹窗级监听（Escape）随弹窗关闭而清理。 */
-  let overlayCleanup: AbortController | undefined;
-  /** 安装级全局监听（scroll/resize）的统一清理。 */
-  const globalCleanup = new AbortController();
-  /** 接管级监听（按钮 keydown）随按钮更换而清理。 */
-  let attachCleanup: AbortController | undefined;
-
-  const close = () => {
-    overlayCleanup?.abort();
-    overlayCleanup = undefined;
-    overlay?.remove();
-    overlay = undefined;
-  };
-  const show = () => {
-    close();
-    let profile: 'default' | 'sift' = 'sift';
-    overlay = document.createElement('div');
-    overlay.dataset.siftWorkspaceCreator = '';
-    overlay.innerHTML = `<div role="dialog" aria-modal="true" aria-labelledby="sift-create-title" data-sift-dialog><header><strong id="sift-create-title">创建工作区</strong><button type="button" data-action="close" aria-label="关闭">×</button></header><p>选择这个工作区使用的类型。</p><div class="types"><button type="button" data-profile="default"><strong>default</strong><small>保持原生单栏对话界面</small></button><button type="button" data-profile="sift" data-selected><strong>sift</strong><small>启用参考、文档、对话三栏界面</small></button></div><div data-error role="alert"></div><footer><button type="button" data-action="cancel">取消</button><button type="button" data-action="create">选择目录并创建</button></footer></div>`;
-    document.body.appendChild(overlay);
-    const select = (next: 'default' | 'sift') => {
-      profile = next;
-      overlay?.querySelectorAll('[data-profile]').forEach(node => node.toggleAttribute('data-selected', (node as HTMLElement).dataset.profile === next));
-    };
-    overlay.querySelectorAll<HTMLButtonElement>('[data-profile]').forEach(button => button.addEventListener('click', () => select(button.dataset.profile as 'default' | 'sift')));
-    overlay.querySelector('[data-action="close"]')?.addEventListener('click', close);
-    overlay.querySelector('[data-action="cancel"]')?.addEventListener('click', close);
-    overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
-    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') close(); };
-    overlayCleanup = new AbortController();
-    document.addEventListener('keydown', escape, { signal: overlayCleanup.signal });
-    overlay.querySelector<HTMLButtonElement>('[data-action="create"]')?.addEventListener('click', async event => {
-      const submit = event.currentTarget as HTMLButtonElement;
-      const errorNode = overlay?.querySelector<HTMLElement>('[data-error]');
-      submit.disabled = true; if (errorNode) errorNode.textContent = '';
-      try {
-        const path = await ctx.uiWorkspace?.pickDirectory();
-        if (!path) { submit.disabled = false; return; }
-        if (!ctx.workspaces) throw new Error('工作区服务不可用。');
-        const workspace = await ctx.workspaces.create({ path });
-        const result = await setProfile({ workspaceId: workspace.workspaceId, profile });
-        if (result.status !== 'ready') throw new Error(result.message ?? '工作区类型保存失败。');
-        close();
-        await ctx.uiWorkspace?.openWorkspace(workspace.workspaceId);
-      } catch (error) {
-        if (errorNode) errorNode.textContent = error instanceof Error ? error.message : '创建工作区失败。';
-        submit.disabled = false;
-      }
-    });
-  };
-  const positionLayer = () => {
-    if (!layer || !nativeButton?.isConnected) return;
-    const rect = nativeButton.getBoundingClientRect();
-    layer.style.left = `${rect.left}px`;
-    layer.style.top = `${rect.top}px`;
-    layer.style.width = `${rect.width}px`;
-    layer.style.height = `${rect.height}px`;
-    layer.style.display = rect.width === 0 || rect.height === 0 ? 'none' : 'block';
-  };
-  const detach = () => {
-    attachCleanup?.abort();
-    attachCleanup = undefined;
-    // 只有按钮还活着时才摘标记；React 重建后旧节点引用已无意义。
-    if (nativeButton?.isConnected) delete nativeButton.dataset.siftCreatorLayer;
-    nativeButton = undefined;
-    layer?.remove();
-    layer = undefined;
-  };
-  const attach = (button: HTMLButtonElement) => {
-    nativeButton = button;
-    button.dataset.siftCreatorLayer = '';
-    attachCleanup = new AbortController();
-    layer = document.createElement('div');
-    layer.dataset.siftCreateLayer = '';
-    layer.setAttribute('role', 'button');
-    layer.setAttribute('aria-label', '添加工作区（选择类型）');
-    layer.addEventListener('click', show, { signal: attachCleanup.signal });
-    // 键盘焦点仍落在原生按钮上：拦下 Enter/Space，避免绕过类型选择直接走原生目录流程。
-    button.addEventListener('keydown', event => {
-      if (event.key !== 'Enter' && event.key !== ' ') return;
-      event.preventDefault();
-      event.stopPropagation();
-      show();
-    }, { signal: attachCleanup.signal });
-    document.body.appendChild(layer);
-    positionLayer();
-  };
-  const reconcile = () => {
-    const found = findWorkspaceAddButton();
-    if (!found) { detach(); return; }
-    if (found === nativeButton) { positionLayer(); return; }
-    // 已被某次接管占用（HMR 重复 apply 的防重入），等持有方自己释放。
-    if (found.dataset.siftCreatorLayer !== undefined) return;
-    detach();
-    attach(found);
-  };
-
-  const style = document.createElement('style');
-  style.dataset.siftCreator = '';
-  style.textContent = creatorCss;
-  document.head.appendChild(style);
-  const observer = new MutationObserver(reconcile);
-  observer.observe(document.body, { childList: true, subtree: true });
-  window.addEventListener('scroll', positionLayer, { capture: true, passive: true, signal: globalCleanup.signal });
-  window.addEventListener('resize', positionLayer, { passive: true, signal: globalCleanup.signal });
-  reconcile();
-  return () => {
-    globalCleanup.abort();
-    observer.disconnect();
-    detach();
-    style.remove();
-    close();
-  };
-}
+import { installWorkspaceTypeCreator } from './workspace-creator.js';
+export { installWorkspaceTypeCreator };
 
 export const inject = ['slots', 'workspaces', 'sessions', 'remote', 'uiWorkspace', 'inputTriggers'];
 
