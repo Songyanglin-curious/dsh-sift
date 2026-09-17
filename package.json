@@ -73,7 +73,11 @@
     "@mozilla/readability": "0.6.0",
     "docx-preview": "^0.4.0",
     "dompurify": "3.4.15",
+    "koffi": "^3.3.0",
+    "md-block": "^0.0.1",
     "pdfjs-dist": "^6.3.289",
+    "sortablejs": "^1.15.7",
+    "tom-select": "^2.6.2",
     "zod": "4.4.3"
   },
   "devDependencies": {
@@ -83,6 +87,7 @@
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "19.2.3",
+    "@types/sortablejs": "^1.15.9",
     "esbuild": "^0.25.0",
     "js-yaml": "^4.1.0",
     "jsdom": "^30.0.1",

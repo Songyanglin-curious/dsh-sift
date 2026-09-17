@@ -1,0 +1,208 @@
+/* Reference Canvas 样式。
+   目标：轻、画布感；去掉管理页式的横线分割、大按钮、永久状态文字。 */
+
+[data-sift-canvas] {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  min-height: 100%;
+  box-sizing: border-box;
+  outline: none;
+}
+
+/* ── Footer：＋ 备用入口（右下角） ───────────────── */
+
+[data-sift-canvas-footer] {
+  display: flex;
+  justify-content: flex-end;
+}
+
+[data-sift-canvas-add] {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary, #8b919a);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+[data-sift-canvas-add]:hover {
+  background: var(--dsw-alias-bg-raised, #f4f5f6);
+  color: var(--dsw-alias-label-primary, #111827);
+}
+
+/* ── 卡片列表 ───────────────────────────────────── */
+
+[data-sift-card-list] {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+[data-sift-card] {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas:
+    'handle . remove'
+    'body body body'
+    'source source source';
+  gap: 2px 6px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--dsw-alias-border-l5, #eceef0);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-base, #fff);
+  transition: box-shadow .15s, border-color .15s;
+}
+
+[data-sift-card]:hover {
+  border-color: var(--dsw-alias-border-l4, #e0e3e6);
+}
+
+[data-sift-card].sortable-chosen {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .10);
+  border-color: var(--dsw-alias-border-l3, #d8dce0);
+}
+
+[data-sift-card].sortable-ghost {
+  opacity: .35;
+  border-style: dashed;
+}
+
+/* 拖拽把手：唯一拖拽热区 */
+[data-sift-card-handle] {
+  grid-area: handle;
+  align-self: center;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--dsw-alias-label-tertiary, #9ca3af);
+  cursor: grab;
+  user-select: none;
+}
+
+[data-sift-card-handle]:hover {
+  color: var(--dsw-alias-label-primary, #111827);
+}
+
+/* 删除：右上，默认弱化 */
+[data-sift-card-remove] {
+  grid-area: remove;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary, #c0c4c9);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+[data-sift-card-remove]:hover {
+  background: var(--dsw-alias-bg-raised, #f4f5f6);
+  color: #e5484d;
+}
+
+/* 正文 */
+[data-sift-card-body] {
+  grid-area: body;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--dsw-alias-label-primary, #111827);
+}
+
+[data-sift-card-body] md-block {
+  all: unset;
+  display: block;
+}
+
+[data-sift-card-body] md-block p {
+  margin: 0 0 6px;
+}
+
+[data-sift-card-body] md-block p:last-child {
+  margin-bottom: 0;
+}
+
+[data-sift-card-body] md-block h1,
+[data-sift-card-body] md-block h2,
+[data-sift-card-body] md-block h3 {
+  margin: 2px 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+[data-sift-card-body] md-block code {
+  font-size: 12px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--dsw-alias-bg-raised, #f3f4f6);
+}
+
+[data-sift-card-body] md-block pre {
+  margin: 6px 0;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-raised, #f3f4f6);
+  overflow-x: auto;
+  font-size: 12px;
+}
+
+[data-sift-card-body] md-block a {
+  color: #4c8dff;
+  text-decoration: none;
+}
+
+[data-sift-card-body] md-block a:hover {
+  text-decoration: underline;
+}
+
+/* 来源：右下弱图标，仅 hover 时显出完整信息（title 属性） */
+[data-sift-card-source] {
+  grid-area: source;
+  justify-self: end;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--dsw-alias-label-tertiary, #b3b8bd);
+  text-decoration: none;
+  cursor: default;
+}
+
+[data-sift-card-source][data-sift-card-source='web'] {
+  cursor: pointer;
+}
+
+[data-sift-card-source][data-sift-card-source='web']:hover {
+  color: #4c8dff;
+}
+
+/* ── 空状态：弱提示 ─────────────────────────────── */
+
+[data-sift-canvas-empty] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 40px 0;
+  color: var(--dsw-alias-label-tertiary, #b3b8bd);
+  font-size: 13px;
+  user-select: none;
+}
+
+[data-sift-canvas-empty] kbd {
+  padding: 2px 8px;
+  border: 1px solid var(--dsw-alias-border-l5, #e5e7eb);
+  border-radius: 5px;
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary, #9ca3af);
+}

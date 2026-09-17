@@ -20,6 +20,17 @@ import {
   removeSource as removeSourceRecord,
 } from './source/store.js';
 import { FileDialogUnsupportedError, pickFiles } from './source/file-dialog.js';
+import { readClipboard } from './clipboard/index.js';
+import {
+  createReference as createReferenceRecord,
+  getDocumentRelations as readDocumentRelations,
+  listReferences as listReferenceSummaries,
+  loadReference as readReferenceFile,
+  removeReference as deleteReferenceFile,
+  saveReference as writeReferenceFile,
+  setDocumentRelations as writeDocumentRelations,
+} from './reference/store.js';
+import type { ReferenceDocument } from '../references.js';
 import type { ToolRuntimeContract } from './tools/contract.js';
 
 export const name = 'sift';
@@ -185,6 +196,50 @@ export class SiftService extends TypertRemoteService {
 
   @Remote
   async browseExternal(input: { path: string }) { return browseExternalEntries(input.path); }
+
+  /**
+   * 读取 Windows 原生剪贴板快照（文本/文件/HTML/URL）。
+   * clipboard 模块是纯工具层，这里只做转发；失败时抛可读错误由客户端展示。
+   */
+  @Remote
+  async readClipboard() { return readClipboard(); }
+
+  // ── Reference 文件化存储（阶段性实施方案 Step 1/2） ──
+
+  @Remote
+  async listReferences(input: { workspaceId: string }) { return listReferenceSummaries(this.workspacePath(input.workspaceId)); }
+
+  @Remote
+  async loadReference(input: { workspaceId: string; path: string }) { return readReferenceFile(this.workspacePath(input.workspaceId), input.path); }
+
+  @Remote
+  async createReference(input: { workspaceId: string; name?: string }) {
+    const path = await createReferenceRecord(this.workspacePath(input.workspaceId), input.name);
+    return { path };
+  }
+
+  @Remote
+  async saveReference(input: { workspaceId: string; path: string; reference: ReferenceDocument }) {
+    await writeReferenceFile(this.workspacePath(input.workspaceId), input.path, input.reference);
+    return {};
+  }
+
+  @Remote
+  async removeReference(input: { workspaceId: string; path: string }) {
+    await deleteReferenceFile(this.workspacePath(input.workspaceId), input.path);
+    return {};
+  }
+
+  @Remote
+  async getDocumentRelations(input: { workspaceId: string; target: string }) {
+    return readDocumentRelations(this.workspacePath(input.workspaceId), input.target);
+  }
+
+  @Remote
+  async setDocumentRelations(input: { workspaceId: string; target: string; references: string[] }) {
+    await writeDocumentRelations(this.workspacePath(input.workspaceId), input.target, input.references);
+    return {};
+  }
 
   constructor(ctx: SiftContext) {
     super(ctx, 'sift');

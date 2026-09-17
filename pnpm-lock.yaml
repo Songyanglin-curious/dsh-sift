@@ -29,9 +29,21 @@ importers:
       dompurify:
         specifier: 3.4.15
         version: 3.4.15
+      koffi:
+        specifier: ^3.3.0
+        version: 3.3.0
+      md-block:
+        specifier: ^0.0.1
+        version: 0.0.1
       pdfjs-dist:
         specifier: ^6.3.289
         version: 6.3.289
+      sortablejs:
+        specifier: ^1.15.7
+        version: 1.15.7
+      tom-select:
+        specifier: ^2.6.2
+        version: 2.6.2
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -54,6 +66,9 @@ importers:
       '@types/react-dom':
         specifier: 19.2.3
         version: 19.2.3(@types/react@19.2.18)
+      '@types/sortablejs':
+        specifier: ^1.15.9
+        version: 1.15.9
       esbuild:
         specifier: ^0.25.0
         version: 0.25.12
@@ -592,6 +607,106 @@ packages:
   '@jridgewell/sourcemap-codec@1.6.0':
     resolution: {integrity: sha512-T7jf+5zgsZHwNJ4lvQ7/aezbyk0nNX+zJVWpmHA7VYsEx7a7qr5Rg5IbtJFqkgze5Y2sruq1RUY8Q837Od7iFw==}
 
+  '@koromix/koffi-android-arm64@3.3.0':
+    resolution: {integrity: sha512-lHXE2mq+uG6CVeX1iepn2ATcAWMZPagr+J0ICYge7wTMDYc5pPRQMq0Rr/16775i6QlUqQqpk8c5Gu66+u3gGA==}
+    cpu: [arm64]
+    os: [android]
+
+  '@koromix/koffi-android-x64@3.3.0':
+    resolution: {integrity: sha512-7EeVK/KS9XNbOsUfy0B3uuSjPQZenjJ35y9QSi6R6eK4Fv0oGvREQaBzIJRJwonxp7sJfGObnwnQTnKTVK2DWA==}
+    cpu: [x64]
+    os: [android]
+
+  '@koromix/koffi-darwin-arm64@3.3.0':
+    resolution: {integrity: sha512-2R9bihYmYFyRP98wRG2m5WQVKMONf7DoPJI8RkGCOUB2afOXJEVXFepiSKxBZGPml8i1USwAxMUwkzbJ5uMG1A==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@koromix/koffi-darwin-x64@3.3.0':
+    resolution: {integrity: sha512-OecYCQfzhUx+XyAtatIHlk0jIz87wKNjtYvwlwgMwgaGQwO/TxFeReNo+s3167Rh1a9c8rUIOjq1jfzAPBxbKA==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@koromix/koffi-freebsd-arm64@3.3.0':
+    resolution: {integrity: sha512-6ytHzV1DuyxTP5LtFmQ3imBk71j/F/Nb0Hcwhjcn35esnknm5rQbgRl6tNRldrkGnM4GIAJpsagooUBh1xAzYg==}
+    cpu: [arm64]
+    os: [freebsd]
+
+  '@koromix/koffi-freebsd-ia32@3.3.0':
+    resolution: {integrity: sha512-hINo5z1Iz2u3Rx3oHfzcmi5A03gYAoYf4nCJJYaY0bb5IuGdIC7noQTyyI9YxfyTJgoqw3wKFWWYtvsAmEo9Hw==}
+    cpu: [ia32]
+    os: [freebsd]
+
+  '@koromix/koffi-freebsd-x64@3.3.0':
+    resolution: {integrity: sha512-7XQYAZh828nW6+y3IdyUNdo2VbVHL5ZC8Qb+yqHrlDjTjVXSyGYZJHAyJZ5c7eSTTKBhtIMTX238rIsdexxrog==}
+    cpu: [x64]
+    os: [freebsd]
+
+  '@koromix/koffi-linux-arm64@3.3.0':
+    resolution: {integrity: sha512-Eo/+wGeawGICzJkUlkzi/KerAJ6U1L/Hf7cnJKH7aGgCOY5RRnjUqXs/eL+UDpRcFHzGeUn+Fq+8q2VxYxvAfw==}
+    cpu: [arm64]
+    os: [linux]
+
+  '@koromix/koffi-linux-arm@3.3.0':
+    resolution: {integrity: sha512-NbahRKKKFkHoFN/ZpLY+w4F6eYSqV4KMN40PmjZ1xQjG/XjYb6PIYgE41c7/acAPxOYqujrcaI3B4BAgWYm5/A==}
+    cpu: [arm]
+    os: [linux]
+
+  '@koromix/koffi-linux-ia32@3.3.0':
+    resolution: {integrity: sha512-u9tKuj42RFWJU8ZgZqcBhkFCkIZE/SE6oR1ljpukttJUhOVuaf/lmsWxyOxiVu3U8T1gtD658FlLgrbMVIn6aQ==}
+    cpu: [ia32]
+    os: [linux]
+
+  '@koromix/koffi-linux-loong64@3.3.0':
+    resolution: {integrity: sha512-2hKlNZ6OXkTUp6fcueZcP0sQ6yhpdfANg9/mWxDKzT1o8qIj4qJD7UcZLCcRIC8JXiP8JQwZBtlPuyXIqofDQg==}
+    cpu: [loong64]
+    os: [linux]
+
+  '@koromix/koffi-linux-ppc64@3.3.0':
+    resolution: {integrity: sha512-bIVAoHgzyRN7xs529BK7rF3BbZUTJgIr0t/wvBvAgaIpreKsdZ/QWxhedKRbTN7ljlDHkPZFmu5XcCjb/vqUag==}
+    cpu: [ppc64]
+    os: [linux]
+
+  '@koromix/koffi-linux-riscv64@3.3.0':
+    resolution: {integrity: sha512-2niYAe+TBXbvf7yog/aiHiDUrKQn+RkMSH5x3ZYo65OQyII1CY3Jk2kP3Pe735gq0LzIYJsDuGMW+02ighSadQ==}
+    cpu: [riscv64]
+    os: [linux]
+
+  '@koromix/koffi-linux-x64@3.3.0':
+    resolution: {integrity: sha512-apU8ZMOrOh1eqMP/Pp0sDZ/WY6A4r6JWph26h63VM9nZ+5KCTYuPgojfoLPNvrfI/bn1PY3+bpXKRhZHI3gxbQ==}
+    cpu: [x64]
+    os: [linux]
+
+  '@koromix/koffi-openbsd-arm64@3.3.0':
+    resolution: {integrity: sha512-iTyHMCSSs+X579sWJv7XVFMp9gOfROI8IUEwp09YxJpGvmiSoipI0J7kytFuFq6dyuwO0Ymy4JdlmKnCM0qkxg==}
+    cpu: [arm64]
+    os: [openbsd]
+
+  '@koromix/koffi-openbsd-ia32@3.3.0':
+    resolution: {integrity: sha512-xCvMV+4VNHjTxgVPEsBzU0k8dlA7aoFO5QjRF9lVU/NzGhUedlYvFgaF6IWsGOoWEaNt9hgP4KK/wxMbm9v8EQ==}
+    cpu: [ia32]
+    os: [openbsd]
+
+  '@koromix/koffi-openbsd-x64@3.3.0':
+    resolution: {integrity: sha512-xItIwx1elM8k1pTudEfuV/1U2gQ06+rFfxCVXrZkyWYYGTzmA5To00f8garJFR+E9gbjQJbn8QDFvWMI+i2sMA==}
+    cpu: [x64]
+    os: [openbsd]
+
+  '@koromix/koffi-win32-arm64@3.3.0':
+    resolution: {integrity: sha512-fD41LgKBx5i1YlJDuds4tRHAaG5vV55tvagzJwKFDR/5BDeaFvH9QFMUMDoNl2LkmVyeug0dIElHr/oxejh3IA==}
+    cpu: [arm64]
+    os: [win32]
+
+  '@koromix/koffi-win32-ia32@3.3.0':
+    resolution: {integrity: sha512-BfDbDVEuQwPZOvWXawc3JT/7i9cN7QHYotgo014jjXb9pNv46Ykhb0RRglkcHg+SdytW/7pxYn18YwcQP6LLvQ==}
+    cpu: [ia32]
+    os: [win32]
+
+  '@koromix/koffi-win32-x64@3.3.0':
+    resolution: {integrity: sha512-D+ORp73rTmvGVfq01+4uBmgVZqrPqU9N9xCZCfexaCDlVk0WQsaqid1dGsi6eScJuHt4Cp8s1i5/4CsecxFTKQ==}
+    cpu: [x64]
+    os: [win32]
+
   '@lezer/common@1.5.2':
     resolution: {integrity: sha512-sxQE460fPZyU3sdc8lafxiPwJHBzZRy/udNFynGQky1SePYBdhkBl1kOagA9uT3pxR8K09bOrmTUqA9wb/PjSQ==}
 
@@ -808,6 +923,12 @@ packages:
   '@ocavue/utils@1.8.0':
     resolution: {integrity: sha512-BD1ro+6Kllkmr/at+o32kvnLrVooUbk9gw3JAPaoAZXx+A5GhZ6Laa+UA38ifhG3vaamx+jcgEwX22BmTSMUVA==}
 
+  '@orchidjs/sifter@1.1.0':
+    resolution: {integrity: sha512-mYwHCfr736cIWWdhhSZvDbf90AKt2xyrJspKFC3qyIJG1LtrJeJunYEqCGG4Aq2ijENbc4WkOjszcvNaIAS/pQ==}
+
+  '@orchidjs/unicode-variants@1.1.2':
+    resolution: {integrity: sha512-5DobW1CHgnBROOEpFlEXytED5OosEWESFvg/VYmH0143oXcijYTprRYJTs+55HzGM4IqxiLFSuqEzu9mPNwVsA==}
+
   '@rollup/rollup-android-arm-eabi@4.63.1':
     resolution: {integrity: sha512-UZ8sUxPTiHWYX9QNdJedb1kDZSpS1t/VPWBWGSgqHNi9w3Cu6IXvu2mzbhiTiPvtrqgTQJ+zqiAq2iPIPilpaQ==}
     cpu: [arm]
@@ -992,6 +1113,9 @@ packages:
 
   '@types/react@19.2.18':
     resolution: {integrity: sha512-AnzbBERsrLKtk2XSfTbYRLjQPdy116Sty4q+T+Bp3IC4l6jNBvreVPAHmpq9qhXQM7CXZPjLVmGMw9sy+hxQ3w==}
+
+  '@types/sortablejs@1.15.9':
+    resolution: {integrity: sha512-7HP+rZGE2p886PKV9c9OJzLBI6BBJu1O7lJGYnPyG3fS4/duUCcngkNCjsLwIMV+WMqANe3tt4irrXHSIe68OQ==}
 
   '@types/tough-cookie@4.0.5':
     resolution: {integrity: sha512-/Ad8+nIOV7Rl++6f1BdKxFSMgmoqEoYbHRpPcx3JEfv8VRsQe9Z4mCXeJBzxs7mbHY/XOZZuXlRNfhpVPbs6ZA==}
@@ -1252,6 +1376,9 @@ packages:
     resolution: {integrity: sha512-h+UCwkZ+4Jz8WQ7MLGfj7UVFrRCizGb912fwF4luGdYsC5paYG1vx+jy+KRcC/XkpjGva/P7nAWuxNnPzRvzHw==}
     hasBin: true
 
+  koffi@3.3.0:
+    resolution: {integrity: sha512-UeyQtptuPeCP0BqKD+Q8ftTQhIUBHO7bXyK9DVIaW9hJSg0BrICm4K5N8Qtn7zKk20sb5vpnES9KBqVksM2kpQ==}
+
   lie@3.3.0:
     resolution: {integrity: sha512-UaiMJzeWRlEujzAuw5LokY1L5ecNQYZKfmyZ9L7wDHb/p5etKaxXhohBcrw0EYby+G/NA52vRSN4N39dxHAIwQ==}
 
@@ -1273,6 +1400,9 @@ packages:
 
   markdown-table@3.0.4:
     resolution: {integrity: sha512-wiYz4+JrLyb/DqW2hkFJxP7Vd7JuTDm77fvbM8VfEQdmSMqcImWeeRbHwZjBjIFki/VaMK2BhFi7oUUZeM5bqw==}
+
+  md-block@0.0.1:
+    resolution: {integrity: sha512-uXAp27jR+ztgoWyQfaktpWYNbknlpzmeYfIkeYGwGjkZDXTcWmom9eVgUsjEn4/I9evLdfydWB0PIzHq9VjUwg==}
 
   mdast-util-definitions@6.0.0:
     resolution: {integrity: sha512-scTllyX6pnYNZH/AIp/0ePz6s4cZtARxImwoPJ7kS42n+MnVsI4XbnG6d4ibehRIldYMWM2LD7ImQblVhUejVQ==}
@@ -1571,6 +1701,9 @@ packages:
   siginfo@2.0.0:
     resolution: {integrity: sha512-ybx0WO1/8bSBLEWXZvEd7gMW3Sn3JFlW3TvX1nREbDLRNQNaeNN8WK0meBwPdAaOI7TtRRRJn/Es1zhrrCHu7g==}
 
+  sortablejs@1.15.7:
+    resolution: {integrity: sha512-Kk8wLQPlS+yi1ZEf48a4+fzHa4yxjC30M/Sr2AnQu+f/MPwvvX9XjZ6OWejiz8crBsLwSq8GHqaxaET7u6ux0A==}
+
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
     engines: {node: '>=0.10.0'}
@@ -1621,6 +1754,9 @@ packages:
   tldts@7.4.12:
     resolution: {integrity: sha512-WylhSDKVeYnWXL3a+vKTaOxjnOeEGw938hImY8zoRWJjRRK/Jp1K+IihBzIONpUmW4e3WmXT6q5FW6vlESVZCA==}
     hasBin: true
+
+  tom-select@2.6.2:
+    resolution: {integrity: sha512-eiXIkk82XzzUTOVQDFpy+ZGejuqdTvMukyUyeZBQaKnqW42UoTiTZnrod/eX0rkqJEc4rZY9DZ3zdjV07i29wQ==}
 
   tough-cookie@6.0.2:
     resolution: {integrity: sha512-exgYmnmL/sJpR3upZfXG5PoatXQii55xAiXGXzY+sROLZ/Y+SLcp9PgJNI9Vz37HpQ74WvDcLT8eqm+kV3FzrA==}
@@ -2305,6 +2441,66 @@ snapshots:
 
   '@jridgewell/sourcemap-codec@1.6.0': {}
 
+  '@koromix/koffi-android-arm64@3.3.0':
+    optional: true
+
+  '@koromix/koffi-android-x64@3.3.0':
+    optional: true
+
+  '@koromix/koffi-darwin-arm64@3.3.0':
+    optional: true
+
+  '@koromix/koffi-darwin-x64@3.3.0':
+    optional: true
+
+  '@koromix/koffi-freebsd-arm64@3.3.0':
+    optional: true
+
+  '@koromix/koffi-freebsd-ia32@3.3.0':
+    optional: true
+
+  '@koromix/koffi-freebsd-x64@3.3.0':
+    optional: true
+
+  '@koromix/koffi-linux-arm64@3.3.0':
+    optional: true
+
+  '@koromix/koffi-linux-arm@3.3.0':
+    optional: true
+
+  '@koromix/koffi-linux-ia32@3.3.0':
+    optional: true
+
+  '@koromix/koffi-linux-loong64@3.3.0':
+    optional: true
+
+  '@koromix/koffi-linux-ppc64@3.3.0':
+    optional: true
+
+  '@koromix/koffi-linux-riscv64@3.3.0':
+    optional: true
+
+  '@koromix/koffi-linux-x64@3.3.0':
+    optional: true
+
+  '@koromix/koffi-openbsd-arm64@3.3.0':
+    optional: true
+
+  '@koromix/koffi-openbsd-ia32@3.3.0':
+    optional: true
+
+  '@koromix/koffi-openbsd-x64@3.3.0':
+    optional: true
+
+  '@koromix/koffi-win32-arm64@3.3.0':
+    optional: true
+
+  '@koromix/koffi-win32-ia32@3.3.0':
+    optional: true
+
+  '@koromix/koffi-win32-x64@3.3.0':
+    optional: true
+
   '@lezer/common@1.5.2': {}
 
   '@lezer/cpp@1.1.6':
@@ -2738,6 +2934,12 @@ snapshots:
 
   '@ocavue/utils@1.8.0': {}
 
+  '@orchidjs/sifter@1.1.0':
+    dependencies:
+      '@orchidjs/unicode-variants': 1.1.2
+
+  '@orchidjs/unicode-variants@1.1.2': {}
+
   '@rollup/rollup-android-arm-eabi@4.63.1':
     optional: true
 
@@ -2864,6 +3066,8 @@ snapshots:
   '@types/react@19.2.18':
     dependencies:
       csstype: 3.2.3
+
+  '@types/sortablejs@1.15.9': {}
 
   '@types/tough-cookie@4.0.5': {}
 
@@ -3200,6 +3404,29 @@ snapshots:
     dependencies:
       commander: 15.0.0
 
+  koffi@3.3.0:
+    optionalDependencies:
+      '@koromix/koffi-android-arm64': 3.3.0
+      '@koromix/koffi-android-x64': 3.3.0
+      '@koromix/koffi-darwin-arm64': 3.3.0
+      '@koromix/koffi-darwin-x64': 3.3.0
+      '@koromix/koffi-freebsd-arm64': 3.3.0
+      '@koromix/koffi-freebsd-ia32': 3.3.0
+      '@koromix/koffi-freebsd-x64': 3.3.0
+      '@koromix/koffi-linux-arm': 3.3.0
+      '@koromix/koffi-linux-arm64': 3.3.0
+      '@koromix/koffi-linux-ia32': 3.3.0
+      '@koromix/koffi-linux-loong64': 3.3.0
+      '@koromix/koffi-linux-ppc64': 3.3.0
+      '@koromix/koffi-linux-riscv64': 3.3.0
+      '@koromix/koffi-linux-x64': 3.3.0
+      '@koromix/koffi-openbsd-arm64': 3.3.0
+      '@koromix/koffi-openbsd-ia32': 3.3.0
+      '@koromix/koffi-openbsd-x64': 3.3.0
+      '@koromix/koffi-win32-arm64': 3.3.0
+      '@koromix/koffi-win32-ia32': 3.3.0
+      '@koromix/koffi-win32-x64': 3.3.0
+
   lie@3.3.0:
     dependencies:
       immediate: 3.0.6
@@ -3217,6 +3444,8 @@ snapshots:
       '@jridgewell/sourcemap-codec': 1.6.0
 
   markdown-table@3.0.4: {}
+
+  md-block@0.0.1: {}
 
   mdast-util-definitions@6.0.0:
     dependencies:
@@ -3784,6 +4013,8 @@ snapshots:
 
   siginfo@2.0.0: {}
 
+  sortablejs@1.15.7: {}
+
   source-map-js@1.2.1: {}
 
   stackback@0.0.2: {}
@@ -3822,6 +4053,11 @@ snapshots:
   tldts@7.4.12:
     dependencies:
       tldts-core: 7.4.12
+
+  tom-select@2.6.2:
+    dependencies:
+      '@orchidjs/sifter': 1.1.0
+      '@orchidjs/unicode-variants': 1.1.2
 
   tough-cookie@6.0.2:
     dependencies:

@@ -1,0 +1,202 @@
+/**
+ * ReferencePanel：整个参考面板，卡片状态的事实源。
+ *
+ * 职责：
+ * - 扫描 / 切换 / 新建当前 Reference（原生 select 单选 + 新建按钮）
+ * - 持有当前 ReferenceDocument 内存副本
+ * - 卡片任何变更（增/删/排序）→ 400ms 防抖 → saveReference 落盘；
+ *   切换参考与 dispose 前先 flush
+ * - Canvas 只做视图与交互，状态回传到这里
+ *
+ * 关联本文档（多选 + relations.json）在 Step 4 接入。
+ */
+
+import panelCss from './panel.css?inline';
+import { mountCanvas } from '../renderer/canvas.js';
+import { injectStyle } from '../renderer/inject-style.js';
+import { mountReferenceEditor, triggerEdit } from './reference-edit.js';
+import type { ReferenceCardData } from '../renderer/card.js';
+import type { ClipboardSnapshot } from '../../host/clipboard/index.js';
+import type { ReferenceDocument, ReferenceSummary } from '../../references.js';
+
+const PLUGIN_ID = '@songyanglin/dsh-sift';
+
+export interface ReferenceApi {
+  listReferences(): Promise<ReferenceSummary[]>;
+  loadReference(path: string): Promise<ReferenceDocument>;
+  createReference(name?: string): Promise<{ path: string }>;
+  saveReference(path: string, reference: ReferenceDocument): Promise<void>;
+}
+
+export interface ReferencePanelOptions {
+  readonly api: ReferenceApi;
+  /** Host 端剪贴板读取（Remote 代理），透传给 Canvas。 */
+  readonly readClipboard?: () => Promise<ClipboardSnapshot>;
+}
+
+const SAVE_DEBOUNCE_MS = 400;
+
+export function mountReferencePanel(section: HTMLElement, options: ReferencePanelOptions): () => void {
+  // ── 状态 ──────────────────────────────────────────────
+
+  let summaries: ReferenceSummary[] = [];
+  let currentPath: string | null = null;
+  let currentDoc: ReferenceDocument | null = null;
+  let dirty = false;
+  let saveTimer: ReturnType<typeof setTimeout> | undefined;
+
+  // ── DOM ───────────────────────────────────────────────
+
+  // 样式注入（head + data-plugin-css 去重，见 inject-style.ts）。
+  // 严禁在 <style> 上设置与 CSS 根选择器（如 [data-sift-ref-panel]）相同的属性，
+  // 否则 <style> 会命中自身规则，把 CSS 文本渲染成可见内容。
+  const disposePanelCss = injectStyle(PLUGIN_ID, 'panel.css', panelCss);
+
+  const panel = document.createElement('div');
+  panel.dataset.siftRefPanel = '';
+
+  // 无当前参考时的占位提示（画布隐藏）
+  const hint = document.createElement('p');
+  hint.dataset.siftRefHint = '';
+  hint.textContent = '复制内容后，Ctrl+V 粘贴到这里。';
+  hint.hidden = true;
+
+  const canvasHost = document.createElement('div');
+  canvasHost.dataset.siftRefCanvasHost = '';
+
+  // ── 落盘：内存改完 → 防抖 → 写当前文件 ────────────────
+
+  const persistNow = async (): Promise<void> => {
+    if (saveTimer !== undefined) {
+      clearTimeout(saveTimer);
+      saveTimer = undefined;
+    }
+    if (!dirty || !currentPath || !currentDoc) return;
+    const path = currentPath;
+    const document = currentDoc;
+    dirty = false;
+    try {
+      await options.api.saveReference(path, document);
+    } catch (error) {
+      console.error('Sift: 参考落盘失败', error);
+      dirty = true; // 允许下一次变更重试
+    }
+  };
+
+  const schedulePersist = () => {
+    if (!currentPath || !currentDoc) return;
+    dirty = true;
+    if (saveTimer !== undefined) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      saveTimer = undefined;
+      void persistNow();
+    }, SAVE_DEBOUNCE_MS);
+  };
+
+  const handleCardsChange = (next: readonly ReferenceCardData[]) => {
+    if (!currentDoc) return;
+    currentDoc = { ...currentDoc, cards: [...next] };
+    schedulePersist();
+  };
+
+  // ── 当前参考切换：先 flush，再加载 ────────────────────
+
+  const updateSelectionVisibility = () => {
+    hint.hidden = currentDoc !== null;
+    canvasHost.hidden = currentDoc === null;
+  };
+
+  const selectReference = async (path: string | null): Promise<void> => {
+    await persistNow();
+    currentPath = path;
+    if (path === null) {
+      currentDoc = null;
+    } else {
+      try {
+        currentDoc = await options.api.loadReference(path);
+      } catch (error) {
+        console.error('Sift: 加载参考失败', error);
+        currentDoc = null;
+        currentPath = null;
+      }
+    }
+    updateSelectionVisibility();
+    canvasApi.refresh();
+  };
+
+  // ── Canvas（视图 + 交互） ─────────────────────────────
+
+  const canvasApi = mountCanvas(canvasHost, {
+    readCards: () => currentDoc?.cards ?? [],
+    ...(options.readClipboard === undefined ? {} : { readClipboard: options.readClipboard }),
+    onCardsChange: handleCardsChange,
+    pasteBoundary: panel,
+    isActive: () => currentDoc !== null,
+  });
+
+  // mountCanvas 成功后把 DOM 挂进 section；
+  // 之前任何抛错都保持 section 干净，由调用方回落，避免拖垮三栏布局。
+  panel.append(hint, canvasHost);
+  section.append(panel);
+
+  // ── 编辑按钮（✎）：挂在 layout.ts 创建的 section header 右侧 ──
+  // section 的第一个子节点是 mountThreeColumn 创建的 <header>，
+  // 包含 "Reference Board" 标题与 "当前有效参考" 描述。
+  const sectionHeader = section.querySelector('header');
+  const editBtn = document.createElement('button');
+  editBtn.type = 'button';
+  editBtn.dataset.siftRefEdit = '';
+  editBtn.title = '编辑参考名称与描述';
+  editBtn.textContent = '✎';
+  editBtn.addEventListener('click', () => {
+    editBtn.blur();
+    if (!currentDoc) return;
+    triggerEdit(currentDoc.name, currentDoc.description, async (name, description) => {
+      if (!currentDoc || !currentPath) return;
+      currentDoc = { ...currentDoc, name, description };
+      schedulePersist();
+    });
+  });
+  if (sectionHeader) sectionHeader.appendChild(editBtn);
+
+  const disposeEditor = mountReferenceEditor();
+
+  const refreshSummaries = async (): Promise<void> => {
+    try {
+      summaries = await options.api.listReferences();
+    } catch (error) {
+      console.error('Sift: 读取参考列表失败', error);
+      summaries = [];
+    }
+  };
+
+  // 新建：若无参考则自动创建，有则选第一个
+  const autoSelectFirst = async (): Promise<void> => {
+    await refreshSummaries();
+    if (summaries.length > 0 && currentPath === null) {
+      await selectReference(summaries[0]!.path);
+    } else if (summaries.length === 0 && currentPath === null) {
+      try {
+        const { path } = await options.api.createReference();
+        await refreshSummaries();
+        await selectReference(path);
+      } catch (error) {
+        console.error('Sift: 新建参考失败', error);
+      }
+    }
+  };
+
+  // ── 启动 ──────────────────────────────────────────────
+
+  void autoSelectFirst();
+
+  // ── 清理：flush → 销毁 ────────────────────────────────
+
+  return () => {
+    void persistNow(); // 尽力而为：dispose 前把挂起的修改写掉
+    canvasApi.dispose();
+    disposeEditor();
+    disposePanelCss();
+    panel.remove();
+  };
+}

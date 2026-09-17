@@ -1,2 +1,4 @@
 allowBuilds:
   esbuild: true
+  koffi: false
+storeDir: D:\.pnpm-store\v11

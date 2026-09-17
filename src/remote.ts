@@ -3,6 +3,7 @@ import type { TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import { entriesSchema, materialsSchema } from './materials.js';
 import { documentIndexSchema, siftDocumentSchema } from './documents.js';
 import { sourceIndexSchema, sourceSchema } from './sources.js';
+import { referenceDocumentSchema, referenceSummarySchema } from './references.js';
 
 const profileSchema = z.object({
   workspaceId: z.string(),
@@ -82,6 +83,17 @@ for (const [method, input, output] of [
 
 const sourceMutationSchema = z.object({ index: sourceIndexSchema, source: sourceSchema }).readonly();
 
+/** Windows 原生剪贴板快照（Host 端 koffi 读取）；字段缺省表示剪贴板没有该格式。 */
+const clipboardSnapshotSchema = z.object({
+  text: z.string().optional(),
+  files: z.array(z.string()).optional(),
+  html: z.object({
+    fragment: z.string().optional(),
+    sourceUrl: z.string().optional(),
+  }).optional(),
+  url: z.string().optional(),
+}).readonly();
+
 for (const [method, input, output] of [
   ['listSources', z.object({ workspaceId: z.string() }), sourceIndexSchema],
   ['addSource', z.object({ workspaceId: z.string(), type: z.enum(['file', 'url']), location: z.enum(['workspace', 'external']).optional(), target: z.string(), title: z.string().optional() }), sourceMutationSchema],
@@ -92,6 +104,28 @@ for (const [method, input, output] of [
   ['createSourceFile', z.object({ workspaceId: z.string(), name: z.string(), content: z.string() }), sourceMutationSchema],
   ['browseWorkspace', z.object({ workspaceId: z.string(), path: z.string() }), entriesSchema],
   ['browseExternal', z.object({ path: z.string() }), entriesSchema],
+] as const) {
+  descriptors.push({ id: `${PACKAGE}#sift/${method}`, service: 'sift', namespace: 'sift', method, implementation: method,
+    invocation: { kind: 'direct' }, parameters: [{ name: 'input', wire: 'input', source: 'json', codec: { mode: 'strict', typeSymbol: `${PACKAGE}#${method}Request`, schema: input } }],
+    result: { mode: 'strict', typeSymbol: `${PACKAGE}#${method}Result`, schema: output },
+  });
+}
+
+descriptors.push({ id: `${PACKAGE}#sift/readClipboard`, service: 'sift', namespace: 'sift', method: 'readClipboard', implementation: 'readClipboard',
+  invocation: { kind: 'direct' }, parameters: [{ name: 'input', wire: 'input', source: 'json', codec: { mode: 'strict', typeSymbol: `${PACKAGE}#readClipboardRequest`, schema: z.object({}).readonly() } }],
+  result: { mode: 'strict', typeSymbol: `${PACKAGE}#readClipboardResult`, schema: clipboardSnapshotSchema },
+});
+
+const referenceSummaryArraySchema = z.array(referenceSummarySchema).readonly();
+
+for (const [method, input, output] of [
+  ['listReferences', z.object({ workspaceId: z.string() }), referenceSummaryArraySchema],
+  ['loadReference', z.object({ workspaceId: z.string(), path: z.string() }), referenceDocumentSchema],
+  ['createReference', z.object({ workspaceId: z.string(), name: z.string().optional() }), z.object({ path: z.string() })],
+  ['saveReference', z.object({ workspaceId: z.string(), path: z.string(), reference: referenceDocumentSchema }), z.object({})],
+  ['removeReference', z.object({ workspaceId: z.string(), path: z.string() }), z.object({})],
+  ['getDocumentRelations', z.object({ workspaceId: z.string(), target: z.string() }), z.array(z.string())],
+  ['setDocumentRelations', z.object({ workspaceId: z.string(), target: z.string(), references: z.array(z.string()) }), z.object({})],
 ] as const) {
   descriptors.push({ id: `${PACKAGE}#sift/${method}`, service: 'sift', namespace: 'sift', method, implementation: method,
     invocation: { kind: 'direct' }, parameters: [{ name: 'input', wire: 'input', source: 'json', codec: { mode: 'strict', typeSymbol: `${PACKAGE}#${method}Request`, schema: input } }],

@@ -2,7 +2,11 @@ import { useEffect, useSyncExternalStore, useState, useRef } from 'react';
 import type { ComponentType } from 'react';
 import { TYPERT_REMOTE } from '../remote.js';
 import type { DocumentsApi } from '../documents.js';
+/** 仅类型导入：编译期擦除，koffi 不会进浏览器 bundle。 */
+import type { ClipboardSnapshot } from '../host/clipboard/index.js';
+import type { ReferenceDocument, ReferenceSummary } from '../references.js';
 import { mountDocumentEditor } from './document-editor.js';
+import { mountReferencePanel } from './reference/panel.js';
 import { type InputTriggerServiceContract } from './dsh-adapter/input-trigger.js';
 import { mountThreeColumn, type ColumnSpec } from './dsh-adapter/layout.js';
 import { findConversationCenter } from './dsh-adapter/selectors.js';
@@ -26,6 +30,15 @@ interface SiftRemote {
     saveDocument: DocumentsApi['saveDocument'];
     readDocumentContent: DocumentsApi['readDocumentContent'];
     removeDocument: DocumentsApi['removeDocument'];
+    /** 读取 Windows 原生剪贴板快照（Host 端 koffi 实现）。 */
+    readClipboard(input: Record<string, never>): Promise<ClipboardSnapshot>;
+    listReferences(input: { workspaceId: string }): Promise<ReferenceSummary[]>;
+    loadReference(input: { workspaceId: string; path: string }): Promise<ReferenceDocument>;
+    createReference(input: { workspaceId: string; name?: string }): Promise<{ path: string }>;
+    saveReference(input: { workspaceId: string; path: string; reference: ReferenceDocument }): Promise<Record<string, never>>;
+    removeReference(input: { workspaceId: string; path: string }): Promise<Record<string, never>>;
+    getDocumentRelations(input: { workspaceId: string; target: string }): Promise<string[]>;
+    setDocumentRelations(input: { workspaceId: string; target: string; references: string[] }): Promise<Record<string, never>>;
 }
 
 interface ClientContext {
@@ -111,6 +124,14 @@ export function apply(ctx: ClientContext): void {
     const siftRemote = {
         getWorkspaceProfile: async (input: { workspaceId: string }) => unwrap(await (await mounted).getWorkspaceProfile(input)),
         setWorkspaceProfile: async (input: { workspaceId: string; profile: 'default' | 'sift' }) => unwrap(await (await mounted).setWorkspaceProfile(input)),
+        readClipboard: async () => unwrap(await (await mounted).readClipboard({})),
+        listReferences: async (input: { workspaceId: string }) => unwrap(await (await mounted).listReferences(input)),
+        loadReference: async (input: { workspaceId: string; path: string }) => unwrap(await (await mounted).loadReference(input)),
+        createReference: async (input: { workspaceId: string; name?: string }) => unwrap(await (await mounted).createReference(input)),
+        saveReference: async (input: { workspaceId: string; path: string; reference: ReferenceDocument }) => unwrap(await (await mounted).saveReference(input)),
+        removeReference: async (input: { workspaceId: string; path: string }) => unwrap(await (await mounted).removeReference(input)),
+        getDocumentRelations: async (input: { workspaceId: string; target: string }) => unwrap(await (await mounted).getDocumentRelations(input)),
+        setDocumentRelations: async (input: { workspaceId: string; target: string; references: string[] }) => unwrap(await (await mounted).setDocumentRelations(input)),
         ...documentsApi,
     };
     const remoteContext = Object.create(ctx, {
@@ -154,10 +175,23 @@ export function apply(ctx: ClientContext): void {
             storageKey: layoutStorageKey(workspace.workspaceId),
             mount: (id, section) => id === 'reference'
                 ? (() => {
-                    const p = document.createElement('p');
-                    p.textContent = '参考面板（待实现）';
-                    section.appendChild(p);
-                    return () => { p.remove(); };
+                    try {
+                        const disposePanel = mountReferencePanel(section, {
+                            api: {
+                                listReferences: () => remoteContext.remote.sift!.listReferences({ workspaceId: workspace.workspaceId }),
+                                loadReference: path => remoteContext.remote.sift!.loadReference({ workspaceId: workspace.workspaceId, path }),
+                                createReference: name => remoteContext.remote.sift!.createReference({ workspaceId: workspace.workspaceId, name }),
+                                saveReference: (path, reference) => remoteContext.remote.sift!.saveReference({ workspaceId: workspace.workspaceId, path, reference }).then(() => undefined),
+                            },
+                            readClipboard: () => remoteContext.remote.sift!.readClipboard({}),
+                        });
+                        return () => disposePanel();
+                    } catch (error) {
+                        // 面板挂载失败只降级左栏，绝不拖垮三栏布局。
+                        console.error('Sift: 参考面板挂载失败', error);
+                        section.textContent = '参考面板加载失败';
+                        return () => { section.textContent = ''; };
+                    }
                 })()
                 : mountDocumentEditor(section, { workspaceId: workspace.workspaceId, api: documentsApi }),
         });
