@@ -16,6 +16,7 @@ import { mountCanvas } from '../renderer/canvas.js';
 import { injectStyle, SIFT_PLUGIN_ID } from '../renderer/inject-style.js';
 import { mountReferenceEditor, triggerEdit } from './reference-edit.js';
 import { mountCardEditor, triggerCardEdit } from '../renderer/card-edit.js';
+import { createHistory } from './history.js';
 import type { ReferenceCardData } from '../renderer/card.js';
 import type { ClipboardSnapshot } from '../../host/clipboard/index.js';
 import type { ReferenceDocument, ReferenceSummary } from '../../references.js';
@@ -47,6 +48,7 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
   let currentDoc: ReferenceDocument | null = null;
   let dirty = false;
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
+  let history = createHistory<ReferenceCardData[]>([]);
 
   // ── DOM ───────────────────────────────────────────────
 
@@ -96,9 +98,29 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
     }, SAVE_DEBOUNCE_MS);
   };
 
-  const handleCardsChange = (next: readonly ReferenceCardData[]) => {
+  // ── 统一卡片变更收口 & Undo / Redo ────────────────
+
+  const applyCardsChange = (next: readonly ReferenceCardData[]) => {
     if (!currentDoc) return;
+    history.record([...next]);
     currentDoc = { ...currentDoc, cards: [...next] };
+    canvasApi.refresh();
+    schedulePersist();
+  };
+
+  const handleUndo = () => {
+    const prev = history.undo();
+    if (prev === null || !currentDoc) return;
+    currentDoc = { ...currentDoc, cards: prev };
+    canvasApi.refresh();
+    schedulePersist();
+  };
+
+  const handleRedo = () => {
+    const next = history.redo();
+    if (next === null || !currentDoc) return;
+    currentDoc = { ...currentDoc, cards: next };
+    canvasApi.refresh();
     schedulePersist();
   };
 
@@ -117,6 +139,7 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
     } else {
       try {
         currentDoc = await options.api.loadReference(path);
+        history.reset([...currentDoc.cards]);
       } catch (error) {
         console.error('Sift: 加载参考失败', error);
         currentDoc = null;
@@ -132,7 +155,7 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
   const canvasApi = mountCanvas(canvasHost, {
     readCards: () => currentDoc?.cards ?? [],
     ...(options.readClipboard === undefined ? {} : { readClipboard: options.readClipboard }),
-    onCardsChange: handleCardsChange,
+    onCardsChange: applyCardsChange,
     pasteBoundary: panel,
     isActive: () => currentDoc !== null,
     onCardEdit: (id: string) => {
@@ -142,14 +165,9 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
         { content: card.content, source: card.source },
         async (content, source) => {
           if (!currentDoc) return;
-          currentDoc = {
-            ...currentDoc,
-            cards: currentDoc.cards.map(c => c.id === id
-              ? { ...c, content, ...(source ? { source } : { source: undefined }) }
-              : c),
-          };
-          schedulePersist();
-          canvasApi.refresh();
+          applyCardsChange(currentDoc.cards.map(c => c.id === id
+            ? { ...c, content, ...(source ? { source } : { source: undefined }) }
+            : c));
         },
       );
     },
@@ -202,6 +220,31 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
     },
   });
 
+  // ── Ctrl+Z / Ctrl+Y 键盘监听 ─────────────────────
+  // 只对焦点在参考面板内时生效；聊天框等外部可编辑区不拦截。
+
+  const isEditableOutside = (target: EventTarget | null): boolean => {
+    if (!(target instanceof HTMLElement)) return false;
+    if (target.isContentEditable) return !panel.contains(target);
+    return target.closest('input, textarea, [contenteditable="true"], [contenteditable=""]') !== null && !panel.contains(target);
+  };
+
+  const onKeydown = (event: KeyboardEvent) => {
+    if (!(event.ctrlKey || event.metaKey)) return;
+    if (!currentDoc) return;
+    if (!panel.matches(':hover') && !panel.contains(document.activeElement)) return;
+    if (isEditableOutside(event.target)) return;
+
+    if (event.key === 'z') {
+      event.preventDefault();
+      handleUndo();
+    } else if (event.key === 'y') {
+      event.preventDefault();
+      handleRedo();
+    }
+  };
+  document.addEventListener('keydown', onKeydown);
+
   const refreshSummaries = async (): Promise<void> => {
     try {
       summaries = await options.api.listReferences();
@@ -234,6 +277,7 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
   // ── 清理：flush → 销毁 ────────────────────────────────
 
   return () => {
+    document.removeEventListener('keydown', onKeydown);
     void persistNow(); // 尽力而为：dispose 前把挂起的修改写掉
     canvasApi.dispose();
     disposeEditor();
