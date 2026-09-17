@@ -1,0 +1,35 @@
+/* 参考信息编辑弹窗：默认 dialog 仅 380px，这里给名称/描述留出更舒服的宽度。 */
+
+.sift-ref-modal.sift-ref-modal {
+  width: min(560px, 100%);
+}
+
+.sift-ref-field-label {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary, #6b7280);
+  margin-bottom: 6px;
+}
+
+.sift-ref-textarea.sift-ref-textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--dsw-alias-border-l4, #d1d5db);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-base, #fff);
+  color: var(--dsw-alias-label-primary, #111827);
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  resize: vertical;
+  outline: none;
+}
+
+.sift-ref-textarea.sift-ref-textarea:focus {
+  border-color: #4c8dff;
+}
+
+.sift-ref-modal-action.sift-ref-modal-action {
+  min-width: 72px;
+}

@@ -23,10 +23,13 @@ export type { ReferenceCardSource };
 export interface CardOptions {
   readonly card: ReferenceCardData;
   readonly onRemove: (id: string) => void;
+  readonly onEdit?: (id: string) => void;
+  /** 点击文件来源图标：在本机打开该文件（由 Host 决定用什么程序）。 */
+  readonly onOpenSource?: (uri: string) => void;
 }
 
 export function mountCard(host: HTMLElement, options: CardOptions): () => void {
-  const { card, onRemove } = options;
+  const { card, onRemove, onEdit, onOpenSource } = options;
 
   const container = document.createElement('div');
   container.dataset.siftCard = '';
@@ -37,6 +40,17 @@ export function mountCard(host: HTMLElement, options: CardOptions): () => void {
   handle.dataset.siftCardHandle = '';
   handle.title = '拖动排序';
   handle.textContent = '⠿';
+
+  // 编辑按钮
+  let editBtn: HTMLButtonElement | undefined;
+  if (onEdit) {
+    editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.dataset.siftCardEdit = '';
+    editBtn.title = '编辑';
+    editBtn.textContent = '✎';
+    editBtn.addEventListener('click', () => onEdit(card.id));
+  }
 
   // 删除按钮
   const removeBtn = document.createElement('button');
@@ -51,20 +65,27 @@ export function mountCard(host: HTMLElement, options: CardOptions): () => void {
   body.dataset.siftCardBody = '';
   const disposeMd = mountMarkdownBlock(body, card.content);
 
-  container.append(handle, removeBtn, body);
+  container.append(handle, removeBtn, ...(editBtn ? [editBtn] : []), body);
 
-  // 来源：右下角弱图标，hover 显示完整 uri；web 可点击打开
-  let disposeSourceClick: (() => void) | undefined;
+  // 来源：右下角弱图标，hover 显示完整 uri。
+  // 网页可点击打开；文件在注入了 onOpenSource 时可点击，交给 Host 用本机程序打开。
   if (card.source?.uri !== undefined && card.source.uri !== '') {
+    const uri = card.source.uri;
     const isWeb = card.source.type === 'web';
-    const source = document.createElement(isWeb ? 'a' : 'span');
+    const canOpenFile = !isWeb && onOpenSource !== undefined;
+    const interactive = isWeb || canOpenFile;
+    const source = interactive ? document.createElement('button') : document.createElement('span');
     source.dataset.siftCardSource = card.source.type;
-    source.title = card.source.uri;
+    source.title = isWeb ? uri : `${uri}${canOpenFile ? '（点击用本机程序打开）' : ''}`;
     source.textContent = isWeb ? '🔗' : '📄';
-    if (isWeb) {
-      source.setAttribute('href', card.source.uri);
-      source.setAttribute('target', '_blank');
-      source.setAttribute('rel', 'noopener noreferrer');
+    if (interactive) {
+      const button = source as HTMLButtonElement;
+      button.type = 'button';
+      button.addEventListener('click', () => {
+        // 网页用 window.open，避免在 Sift 页面里整页跳走；文件交给 Host 用本机程序打开。
+        if (isWeb) window.open(uri, '_blank', 'noopener,noreferrer');
+        else onOpenSource!(uri);
+      });
     }
     container.appendChild(source);
   }
@@ -73,7 +94,6 @@ export function mountCard(host: HTMLElement, options: CardOptions): () => void {
 
   return () => {
     disposeMd();
-    disposeSourceClick?.();
     container.remove();
   };
 }

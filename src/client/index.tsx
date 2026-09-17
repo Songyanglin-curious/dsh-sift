@@ -39,6 +39,10 @@ interface SiftRemote {
     removeReference(input: { workspaceId: string; path: string }): Promise<Record<string, never>>;
     getDocumentRelations(input: { workspaceId: string; target: string }): Promise<string[]>;
     setDocumentRelations(input: { workspaceId: string; target: string; references: string[] }): Promise<Record<string, never>>;
+    /** Host 的原生文件对话框（在 Host 所在显示器弹出）。 */
+    pickSourceFiles(input: Record<string, never>): Promise<{ paths: string[]; cancelled: boolean; message?: string }>;
+    /** 在本机打开一个文件（配置的编辑器，未配置则系统默认程序）。 */
+    openSourcePath(input: { path: string }): Promise<Record<string, never>>;
 }
 
 interface ClientContext {
@@ -132,6 +136,8 @@ export function apply(ctx: ClientContext): void {
         removeReference: async (input: { workspaceId: string; path: string }) => unwrap(await (await mounted).removeReference(input)),
         getDocumentRelations: async (input: { workspaceId: string; target: string }) => unwrap(await (await mounted).getDocumentRelations(input)),
         setDocumentRelations: async (input: { workspaceId: string; target: string; references: string[] }) => unwrap(await (await mounted).setDocumentRelations(input)),
+        pickSourceFiles: async () => unwrap(await (await mounted).pickSourceFiles({})),
+        openSourcePath: async (input: { path: string }) => unwrap(await (await mounted).openSourcePath(input)),
         ...documentsApi,
     };
     const remoteContext = Object.create(ctx, {
@@ -182,6 +188,8 @@ export function apply(ctx: ClientContext): void {
                                 loadReference: path => remoteContext.remote.sift!.loadReference({ workspaceId: workspace.workspaceId, path }),
                                 createReference: name => remoteContext.remote.sift!.createReference({ workspaceId: workspace.workspaceId, name }),
                                 saveReference: (path, reference) => remoteContext.remote.sift!.saveReference({ workspaceId: workspace.workspaceId, path, reference }).then(() => undefined),
+                                pickSourceFiles: () => remoteContext.remote.sift!.pickSourceFiles({}),
+                                openSourcePath: path => remoteContext.remote.sift!.openSourcePath({ path }).then(() => undefined),
                             },
                             readClipboard: () => remoteContext.remote.sift!.readClipboard({}),
                         });

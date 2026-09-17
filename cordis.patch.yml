@@ -1,3 +1,10 @@
+# Sift 插件挂载与配置。
+#
+# editorCommand：点击卡片上的「文件」来源时用来打开该文件的编辑器**可执行文件绝对路径**。
+#   留空（''）表示交给系统默认程序打开。示例（VS Code）：
+#     editorCommand: 'D:\ProgrameFiles\Microsoft VS Code\Code.exe'
 - insert:
     - id: sift
       name: '@songyanglin/dsh-sift'
+      config:
+        editorCommand: ''

@@ -1,5 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis';
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
+import { z } from 'zod';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { readMaterials, listMaterialFiles, mutateMaterials, readMaterial } from './materials.js';
@@ -20,6 +21,7 @@ import {
   removeSource as removeSourceRecord,
 } from './source/store.js';
 import { FileDialogUnsupportedError, pickFiles } from './source/file-dialog.js';
+import { OpenPathError, openPathInEditor } from './open-path.js';
 import { readClipboard } from './clipboard/index.js';
 import {
   createReference as createReferenceRecord,
@@ -94,9 +96,18 @@ function isMissingFile(error: unknown): boolean {
   return typeof error === 'object' && error !== null && (error as NodeJS.ErrnoException).code === 'ENOENT';
 }
 
+/** 插件配置（写在 cordis.patch.yml 的 sift 行 config 段）。 */
+export const Config = z.object({
+  /** 打开卡片上「文件」来源时使用的编辑器可执行文件绝对路径；留空则用系统默认程序。 */
+  editorCommand: z.string().optional(),
+}).default({});
+export type SiftConfig = z.infer<typeof Config>;
+
 export class SiftService extends TypertRemoteService {
   static inject = ['workspaceRegistry', 'tools'];
+  static Config = Config;
   private readonly registry: WorkspaceRegistry;
+  private readonly config: SiftConfig;
   /** Phase 8 之前，待确认的 Document 修改提案先只存在内存里。 */
   private readonly documentChanges = createDocumentChangeStore();
   private workspacePath(id: string): string {
@@ -204,6 +215,21 @@ export class SiftService extends TypertRemoteService {
   @Remote
   async readClipboard() { return readClipboard(); }
 
+  /**
+   * 在本机打开一个文件（卡片上「文件」来源的点击行为）。
+   * 优先用配置的 editorCommand，未配置则交给系统默认程序；失败抛可读错误。
+   */
+  @Remote
+  async openSourcePath(input: { path: string }) {
+    try {
+      await openPathInEditor(input.path, { editorCommand: this.config.editorCommand });
+    } catch (error) {
+      if (error instanceof OpenPathError) throw error;
+      throw new OpenPathError(error instanceof Error ? error.message : String(error));
+    }
+    return {};
+  }
+
   // ── Reference 文件化存储（阶段性实施方案 Step 1/2） ──
 
   @Remote
@@ -241,9 +267,10 @@ export class SiftService extends TypertRemoteService {
     return {};
   }
 
-  constructor(ctx: SiftContext) {
+  constructor(ctx: SiftContext, config: SiftConfig = {}) {
     super(ctx, 'sift');
     this.registry = ctx.workspaceRegistry;
+    this.config = config;
     // 注册即返回精确 disposer，随本 ctx 卸载自动回收，无需再包一层 effect。
     ctx.tools.register(createDocumentChangeTool(this.documentChanges));
     ctx.logger.info('Sift 插件已加载。');

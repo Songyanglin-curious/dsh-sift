@@ -11,6 +11,9 @@
  * 把 UA 默认 `display:none` 覆盖掉，导致 CSS 源码被浏览器渲染成可见文本。
  */
 
+/** 本插件在 DSH 中的包名；样式去重标记统一用它。 */
+export const SIFT_PLUGIN_ID = '@songyanglin/dsh-sift';
+
 export function injectStyle(pluginId: string, cssId: string, css: string): () => void {
   const dedupeKey = `${pluginId}/${cssId}`;
   if (document.querySelector(`style[data-plugin-css="${CSS.escape(dedupeKey)}"]`)) {

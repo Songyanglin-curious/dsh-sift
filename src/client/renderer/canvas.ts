@@ -15,13 +15,11 @@
 import Sortable from 'sortablejs';
 import { mountCard, type ReferenceCardData } from './card.js';
 import { snapshotToCards, newCardId } from './clipboard-mapper.js';
-import { injectStyle } from './inject-style.js';
+import { injectStyle, SIFT_PLUGIN_ID } from './inject-style.js';
 import canvasCss from './canvas.css?inline';
 
 /** 同 clipboard-mapper 的约定：只允许 type-only 导入，防止 koffi 进浏览器 bundle。 */
 import type { ClipboardSnapshot } from '../../host/clipboard/index.js';
-
-const PLUGIN_ID = '@songyanglin/dsh-sift';
 
 export interface CanvasOptions {
   /** Panel 是事实源；每次渲染都从这里取最新卡片数组。 */
@@ -41,17 +39,28 @@ export interface CanvasOptions {
    * 未激活时 paste 不拦截、不 preventDefault，避免吞掉用户的粘贴操作。
    */
   readonly isActive?: () => boolean;
+  /**
+   * 编辑卡片；由 Panel 提供，打开卡片编辑弹窗并落盘。
+   */
+  readonly onCardEdit?: (id: string) => void;
+  /**
+   * 点击卡片的文件来源图标；由 Panel 提供（调用 Host 打开本机文件）。
+   * 未提供时文件图标不可点击。
+   */
+  readonly onCardOpenSource?: (uri: string) => void;
 }
 
 export interface CanvasApi {
   /** 外部状态变化（如切换 Reference）后让 Canvas 重读重渲染。 */
   refresh(): void;
   dispose(): void;
+  /** 在画布上方短暂显示一条提示（用于展示打开文件失败等原因）。 */
+  notify(message: string): void;
 }
 
 export function mountCanvas(host: HTMLElement, options: CanvasOptions): CanvasApi {
   // 注入样式（对齐官方 DSH 插件模式：head + data-plugin-css 去重，见 inject-style.ts）
-  const disposeStyle = injectStyle(PLUGIN_ID, 'canvas.css', canvasCss);
+  const disposeStyle = injectStyle(SIFT_PLUGIN_ID, 'canvas.css', canvasCss);
 
   // Canvas 根容器：可聚焦，使 Ctrl+V 的 paste 事件能落到这里
   const canvas = document.createElement('div');
@@ -75,6 +84,19 @@ export function mountCanvas(host: HTMLElement, options: CanvasOptions): CanvasAp
   canvas.append(list, footer);
   host.appendChild(canvas);
 
+  // 临时提示条：只在需要时出现（如打开文件失败），几秒后自动消失。
+  const notice = document.createElement('div');
+  notice.dataset.siftCanvasNotice = '';
+  notice.hidden = true;
+  let noticeTimer: ReturnType<typeof setTimeout> | undefined;
+  const notify = (message: string) => {
+    notice.textContent = message;
+    notice.hidden = false;
+    if (noticeTimer !== undefined) clearTimeout(noticeTimer);
+    noticeTimer = setTimeout(() => { notice.hidden = true; noticeTimer = undefined; }, 5000);
+  };
+  canvas.insertBefore(notice, list);
+
   // 清理函数列表
   const disposeFns: (() => void)[] = [];
 
@@ -93,6 +115,8 @@ export function mountCanvas(host: HTMLElement, options: CanvasOptions): CanvasAp
           options.onCardsChange(next);
           renderAll();
         },
+        ...(options.onCardEdit ? { onEdit: options.onCardEdit } : {}),
+        ...(options.onCardOpenSource ? { onOpenSource: options.onCardOpenSource } : {}),
       });
       disposeFns.push(dispose);
     }
@@ -186,7 +210,9 @@ export function mountCanvas(host: HTMLElement, options: CanvasOptions): CanvasAp
 
   return {
     refresh: renderAll,
+    notify,
     dispose: () => {
+      if (noticeTimer !== undefined) clearTimeout(noticeTimer);
       document.removeEventListener('paste', onDocumentPaste);
       sortable?.destroy();
       disposeStyle();

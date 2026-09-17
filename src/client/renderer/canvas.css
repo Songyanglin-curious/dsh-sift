@@ -11,6 +11,19 @@
   outline: none;
 }
 
+/* 临时提示条（如打开文件失败）；默认 hidden，由 notify() 短暂显示。 */
+[data-sift-canvas-notice] {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--dsw-alias-state-error-primary, #e5484d);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary, #e5484d) 8%, transparent);
+  color: var(--dsw-alias-label-primary, #111827);
+  font-size: 12px;
+  line-height: 18px;
+  word-break: break-all;
+}
+
 /* ── Footer：＋ 备用入口（右下角） ───────────────── */
 
 [data-sift-canvas-footer] {
@@ -47,11 +60,11 @@
 
 [data-sift-card] {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto 1fr auto auto;
   grid-template-areas:
-    'handle . remove'
-    'body body body'
-    'source source source';
+    'handle . remove edit'
+    'body body body body'
+    'source source source source';
   gap: 2px 6px;
   width: 100%;
   box-sizing: border-box;
@@ -88,6 +101,26 @@
 }
 
 [data-sift-card-handle]:hover {
+  color: var(--dsw-alias-label-primary, #111827);
+}
+
+/* 编辑按钮位置 */
+[data-sift-card-edit] {
+  grid-area: edit;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary, #c0c4c9);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+[data-sift-card-edit]:hover {
+  background: var(--dsw-alias-bg-raised, #f4f5f6);
   color: var(--dsw-alias-label-primary, #111827);
 }
 
@@ -177,11 +210,18 @@
   cursor: default;
 }
 
-[data-sift-card-source][data-sift-card-source='web'] {
+/* 可点击的来源（网页 / 已接入本机打开的文件）是 button，需重置 UA 样式并给出 hover 反馈 */
+button[data-sift-card-source] {
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1;
   cursor: pointer;
 }
 
-[data-sift-card-source][data-sift-card-source='web']:hover {
+button[data-sift-card-source]:hover {
   color: #4c8dff;
 }
 

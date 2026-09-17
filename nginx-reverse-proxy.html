@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nginx 反向代理原理图</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: #F1EFE8;
+    color: #2C2C2A;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 40px 16px;
+  }
+  .card {
+    background: #FFFFFF;
+    border: 1px solid #B4B2A9;
+    border-radius: 16px;
+    max-width: 680px;
+    width: 100%;
+    padding: 28px 24px;
+  }
+  .title { font-size: 22px; font-weight: 500; }
+  .subtitle { font-size: 12px; color: #5F5E5A; margin-top: 6px; }
+
+  .flow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 28px 0 8px;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .col { display: flex; flex-direction: column; gap: 8px; }
+  .node {
+    border: 1px solid #B4B2A9;
+    background: #FFFFFF;
+    border-radius: 10px;
+    padding: 10px 12px;
+    text-align: center;
+    min-width: 96px;
+    transition: border-color .3s, background .3s;
+    cursor: default;
+  }
+  .node.on { border-color: #378ADD; background: #E6F1FB; }
+  .node-t { font-size: 14px; font-weight: 500; color: #2C2C2A; }
+  .node.on .node-t { color: #0C447C; }
+  .node-s { font-size: 12px; color: #5F5E5A; margin-top: 2px; }
+  .node.on .node-s { color: #185FA5; }
+
+  .line { transition: stroke .3s; }
+  .line.on { stroke: #378ADD; }
+  .head { transition: fill .3s; }
+  .head.on { fill: #378ADD; }
+
+  .steps {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin: 20px 0 12px;
+    flex-wrap: wrap;
+  }
+  .btn {
+    border: 1px solid #B4B2A9;
+    background: #FFFFFF;
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 13px;
+    color: #2C2C2A;
+    cursor: pointer;
+    transition: all .2s;
+    font-family: inherit;
+  }
+  .btn:hover { border-color: #888780; }
+  .btn.on { border-color: #378ADD; background: #E6F1FB; color: #185FA5; }
+
+  .panel {
+    border: 1px solid #B4B2A9;
+    background: #F1EFE8;
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-size: 14px;
+    line-height: 1.7;
+    min-height: 76px;
+    color: #444441;
+  }
+
+  .legend {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    margin-top: 14px;
+    font-size: 12px;
+    color: #5F5E5A;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-solid { width: 28px; height: 0; border-top: 2px solid #888780; }
+  .legend-dash { width: 28px; height: 0; border-top: 2px dashed #888780; }
+
+  .footer {
+    text-align: center;
+    font-size: 12px;
+    color: #5F5E5A;
+    margin-top: 14px;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="title">Nginx 反向代理 · 一次请求的旅程</div>
+  <div class="subtitle">点击下方步骤或自动播放，观察请求如何流动</div>
+
+  <div class="flow">
+    <div class="node" id="n-browser">
+      <div class="node-t">浏览器</div>
+      <div class="node-s">用户</div>
+    </div>
+
+    <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">
+      <path id="f1" class="line" d="M4 20 L52 20" fill="none" stroke="#888780" stroke-width="1.5"/>
+      <polygon id="f1h" class="head" points="52,15 62,20 52,25" fill="#888780"/>
+      <path id="r1" class="line" d="M60 44 L12 44" fill="none" stroke="#888780" stroke-width="1.5" stroke-dasharray="4 3"/>
+      <polygon id="r1h" class="head" points="12,39 2,44 12,49" fill="#888780"/>
+    </svg>
+
+    <div class="node" id="n-nginx" style="border-radius:12px; padding:14px 16px; min-width:110px;">
+      <div class="node-t">Nginx</div>
+      <div class="node-s">反向代理 · 统一入口</div>
+    </div>
+
+    <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">
+      <path id="f2" class="line" d="M4 20 L52 20" fill="none" stroke="#888780" stroke-width="1.5"/>
+      <polygon id="f2h" class="head" points="52,15 62,20 52,25" fill="#888780"/>
+      <path id="r2" class="line" d="M60 44 L12 44" fill="none" stroke="#888780" stroke-width="1.5" stroke-dasharray="4 3"/>
+      <polygon id="r2h" class="head" points="12,39 2,44 12,49" fill="#888780"/>
+    </svg>
+
+    <div class="col">
+      <div class="node" id="n-web">
+        <div class="node-t">Web 服务</div>
+        <div class="node-s">页面</div>
+      </div>
+      <div class="node" id="n-api">
+        <div class="node-t">API 服务</div>
+        <div class="node-s">数据</div>
+      </div>
+      <div class="node" id="n-static">
+        <div class="node-t">静态资源</div>
+        <div class="node-s">图片 · CSS</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><span class="legend-solid"></span>去程（请求）</div>
+    <div class="legend-item"><span class="legend-dash"></span>回程（响应）</div>
+  </div>
+
+  <div class="steps">
+    <button class="btn step">1 · 发起请求</button>
+    <button class="btn step">2 · 转发给后端</button>
+    <button class="btn step">3 · 后端返回</button>
+    <button class="btn step">4 · 送达用户</button>
+    <button class="btn" id="play">自动播放</button>
+  </div>
+
+  <div class="panel" id="panel"></div>
+
+  <div class="footer">外界只与 Nginx 通信——后端服务器不直接暴露</div>
+</div>
+
+<script>
+(function () {
+  // 每个步骤对应的讲解文字
+  var texts = [
+    '用户在浏览器输入网址，请求首先到达 Nginx——就像访客走进公司大门，第一站永远是前台。',
+    'Nginx 根据配置规则（路径、域名等）决定把请求转发给哪台后端服务器——前台问你办什么事，然后指给对的部门。',
+    '后端服务器处理完毕（生成页面、查询数据），把结果交回 Nginx——部门办完事，把材料递回前台。',
+    'Nginx 把结果原样返回给浏览器——访客拿到结果离开，全程只跟前台打过交道，从没见过部门。'
+  ];
+  // 每个步骤高亮的节点与连线（去程线在前半段，回程线在后半段）
+  var active = [
+    ['n-browser', 'f1', 'f1h'],
+    ['n-nginx', 'f2', 'f2h', 'n-api'],
+    ['n-api', 'r2', 'r2h'],
+    ['n-nginx', 'r1', 'r1h', 'n-browser']
+  ];
+  var all = ['n-browser', 'n-nginx', 'n-web', 'n-api', 'n-static',
+             'f1', 'f1h', 'f2', 'f2h', 'r1', 'r1h', 'r2', 'r2h'];
+
+  var panel = document.getElementById('panel');
+  var btns = Array.prototype.slice.call(document.querySelectorAll('.step'));
+  var playBtn = document.getElementById('play');
+  var cur = 0;
+  var timer = null;
+
+  function render(n) {
+    cur = n;
+    all.forEach(function (id) {
+      document.getElementById(id).classList.remove('on');
+    });
+    active[n].forEach(function (id) {
+      document.getElementById(id).classList.add('on');
+    });
+    panel.textContent = texts[n];
+    btns.forEach(function (b, i) { b.classList.toggle('on', i === n); });
+  }
+
+  function stop() {
+    if (timer) {
+      clearInterval(timer);
+      timer = null;
+      playBtn.textContent = '自动播放';
+    }
+  }
+
+  btns.forEach(function (b, i) {
+    b.onclick = function () { stop(); render(i); };
+  });
+
+  playBtn.onclick = function () {
+    if (timer) { stop(); return; }
+    render((cur + 1) % 4);
+    timer = setInterval(function () { render((cur + 1) % 4); }, 1800);
+    playBtn.textContent = '暂停';
+  };
+
+  render(0);
+})();
+</script>
+</body>
+</html>

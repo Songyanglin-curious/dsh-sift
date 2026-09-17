@@ -107,24 +107,12 @@
   overflow: auto;
   padding: 0;
   color: var(--dsw-alias-label-primary, #111827);
-  font-size: 15px;
+  font-size: var(--dsh-content-font-size, 14px);
 }
 
-[data-sift-editor] .milkdown {
-  --crepe-color-background: var(--dsw-alias-bg-base, #fff);
-  --crepe-color-on-background: var(--dsw-alias-label-primary, #111827);
-  --crepe-color-surface: var(--dsw-alias-bg-raised, #f4f5f6);
-  --crepe-color-surface-low: var(--dsw-alias-bg-raised, #f4f5f6);
-  --crepe-color-on-surface: var(--dsw-alias-label-primary, #111827);
-  --crepe-color-on-surface-variant: var(--dsw-alias-label-tertiary, #6b7280);
-  --crepe-color-outline: var(--dsw-alias-border-l4, #ddd);
-  --crepe-color-hover: var(--dsw-alias-bg-raised, #f4f5f6);
-  --crepe-font-default: system-ui, sans-serif;
-  --crepe-font-title: system-ui, sans-serif;
-}
-
+/* 排版（字体/字号/配色/标题尺度）统一由 crepe-markdown.css 提供，
+   这里只保留本栏的编辑器布局。 */
 [data-sift-editor] .milkdown .ProseMirror {
   padding: 24px 32px 80px;
   min-height: 300px;
-  overflow-wrap: anywhere;
 }

@@ -1,28 +1,30 @@
 /**
  * 编辑参考名称与描述的小弹窗。
  *
- * 复用 DSH Modal（@deepseek-ai/dsh-client-ui-primitives），
- * 表单使用原生 input/textarea 加 DSH 主题变量内联样式，不自己造 UI 组件。
+ * 全部使用 DSH primitives（Modal / Button / Input）；描述是多行文本，
+ * primitives 未提供 Textarea，故用原生 <textarea> + 主题变量的样式表。
  *
- * 挂载模式与 workspace-creator 一致：
- * - 模块级 callback，挂载时写入，点击✎时触发打开。
+ * 挂载模式与 workspace-creator 一致：模块级 callback，挂载时写入，点击 ✎ 时触发。
  */
 
 import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Modal } from '@deepseek-ai/dsh-client-ui-primitives';
+import { Button, Input, Modal } from '@deepseek-ai/dsh-client-ui-primitives';
+import { injectStyle, SIFT_PLUGIN_ID } from '../renderer/inject-style.js';
+import referenceEditCss from './reference-edit.css?inline';
 
-/** 当前名称与描述，由 panel 在点击✎时设入。 */
 let currentInitial: { name: string; description: string } | null = null;
 let onSaveCallback: ((name: string, description: string) => Promise<void>) | null = null;
+let showEditor: (() => void) | undefined;
 
-/** ✎ 按钮点击时由 panel 调用，打开弹窗并填入当前值。 */
-let openEditor: (() => void) | undefined;
-
-export function triggerEdit(name: string, description: string, onSave: (name: string, description: string) => Promise<void>): void {
+export function triggerEdit(
+  name: string,
+  description: string,
+  onSave: (name: string, description: string) => Promise<void>,
+): void {
   currentInitial = { name, description };
   onSaveCallback = onSave;
-  openEditor?.();
+  showEditor?.();
 }
 
 function EditModal() {
@@ -33,7 +35,7 @@ function EditModal() {
   const [error, setError] = useState<string | undefined>();
 
   useEffect(() => {
-    openEditor = () => {
+    showEditor = () => {
       if (currentInitial) {
         setName(currentInitial.name);
         setDescription(currentInitial.description);
@@ -41,17 +43,14 @@ function EditModal() {
       setError(undefined);
       setOpen(true);
     };
-    return () => { openEditor = undefined; };
+    return () => { showEditor = undefined; };
   }, []);
 
   const close = () => { setOpen(false); setBusy(false); setError(undefined); };
 
   const handleSave = async () => {
     const trimmedName = name.trim();
-    if (trimmedName === '') {
-      setError('名称不能为空。');
-      return;
-    }
+    if (trimmedName === '') { setError('名称不能为空。'); return; }
     setBusy(true);
     setError(undefined);
     try {
@@ -65,57 +64,63 @@ function EditModal() {
   };
 
   return (
-    <Modal open={isOpen} onClose={close} title="编辑参考" closeLabel="关闭"
+    <Modal
+      open={isOpen}
+      onClose={close}
+      title="编辑参考"
+      closeLabel="关闭"
       description="修改当前参考的名称与描述。"
+      className="sift-ref-modal"
       footer={
         <>
-          <button type="button" onClick={close} disabled={busy}
-            style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid rgba(127,127,127,.35)', background: 'transparent', color: 'inherit', cursor: 'pointer', font: 'inherit', fontSize: 13 }}>
-            取消
-          </button>
-          <button type="button" onClick={handleSave} disabled={busy}
-            style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #4c8dff', background: busy ? '#8ab4ff' : '#4c8dff', color: '#fff', cursor: 'pointer', font: 'inherit', fontSize: 13 }}>
+          <Button variant="outline" className="sift-ref-modal-action" onClick={close} disabled={busy}>取消</Button>
+          <Button variant="primary" className="sift-ref-modal-action" onClick={handleSave} disabled={busy}>
             {busy ? '保存中…' : '保存'}
-          </button>
+          </Button>
         </>
-      }>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span style={{ fontSize: 12, color: 'var(--dsw-alias-label-secondary, #6b7280)' }}>名称</span>
-          <input
-            type="text" value={name} onChange={e => setName(e.target.value)} disabled={busy}
-            style={{
-              padding: '8px 10px', borderRadius: 6, border: '1px solid var(--dsw-alias-border-l4, #d1d5db)',
-              background: 'var(--dsw-alias-bg-base, #fff)', color: 'var(--dsw-alias-label-primary, #111827)',
-              font: 'inherit', fontSize: 13, outline: 'none',
-            }}
-            onFocus={e => e.currentTarget.style.borderColor = '#4c8dff'}
-            onBlur={e => e.currentTarget.style.borderColor = ''}
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div>
+          <div className="sift-ref-field-label">名称</div>
+          <Input
+            value={name}
+            disabled={busy}
+            aria-label="参考名称"
+            placeholder="例如：DSH 插件设计资料"
+            onChange={e => setName(e.target.value)}
           />
-        </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span style={{ fontSize: 12, color: 'var(--dsw-alias-label-secondary, #6b7280)' }}>描述</span>
+        </div>
+        <div>
+          <div className="sift-ref-field-label">描述</div>
           <textarea
-            value={description} onChange={e => setDescription(e.target.value)} disabled={busy} rows={3}
-            style={{
-              padding: '8px 10px', borderRadius: 6, border: '1px solid var(--dsw-alias-border-l4, #d1d5db)',
-              background: 'var(--dsw-alias-bg-base, #fff)', color: 'var(--dsw-alias-label-primary, #111827)',
-              font: 'inherit', fontSize: 13, outline: 'none', resize: 'vertical',
-            }}
-            onFocus={e => e.currentTarget.style.borderColor = '#4c8dff'}
-            onBlur={e => e.currentTarget.style.borderColor = ''}
+            className="sift-ref-textarea"
+            rows={4}
+            value={description}
+            disabled={busy}
+            aria-label="参考描述"
+            placeholder="这份参考是关于什么的（可选）"
+            onChange={e => setDescription(e.target.value)}
           />
-        </label>
-        {error && <p style={{ margin: 0, color: '#e5484d', fontSize: 12 }} role="alert">{error}</p>}
+        </div>
+        {error && <p style={{ margin: 0, color: 'var(--dsw-alias-state-error-primary, #e5484d)', fontSize: 12 }} role="alert">{error}</p>}
       </div>
     </Modal>
   );
 }
 
 export function mountReferenceEditor(): () => void {
+  const disposeCss = injectStyle(SIFT_PLUGIN_ID, 'reference-edit.css', referenceEditCss);
   const container = document.createElement('div');
   container.dataset.siftReferenceEditor = '';
   const root = createRoot(container);
   root.render(<EditModal />);
-  return () => { root.unmount(); container.remove(); openEditor = undefined; onSaveCallback = null; currentInitial = null; };
+  return () => {
+    root.unmount();
+    container.remove();
+    disposeCss();
+    showEditor = undefined;
+    onSaveCallback = null;
+    currentInitial = null;
+  };
 }

@@ -13,19 +13,22 @@
 
 import panelCss from './panel.css?inline';
 import { mountCanvas } from '../renderer/canvas.js';
-import { injectStyle } from '../renderer/inject-style.js';
+import { injectStyle, SIFT_PLUGIN_ID } from '../renderer/inject-style.js';
 import { mountReferenceEditor, triggerEdit } from './reference-edit.js';
+import { mountCardEditor, triggerCardEdit } from '../renderer/card-edit.js';
 import type { ReferenceCardData } from '../renderer/card.js';
 import type { ClipboardSnapshot } from '../../host/clipboard/index.js';
 import type { ReferenceDocument, ReferenceSummary } from '../../references.js';
-
-const PLUGIN_ID = '@songyanglin/dsh-sift';
 
 export interface ReferenceApi {
   listReferences(): Promise<ReferenceSummary[]>;
   loadReference(path: string): Promise<ReferenceDocument>;
   createReference(name?: string): Promise<{ path: string }>;
   saveReference(path: string, reference: ReferenceDocument): Promise<void>;
+  /** Host 的原生文件对话框（多选）；卡片来源只取第一个路径。 */
+  pickSourceFiles(): Promise<{ paths: readonly string[]; cancelled: boolean; message?: string }>;
+  /** 在本机打开一个文件；失败时抛出可读错误。 */
+  openSourcePath(path: string): Promise<void>;
 }
 
 export interface ReferencePanelOptions {
@@ -50,7 +53,7 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
   // 样式注入（head + data-plugin-css 去重，见 inject-style.ts）。
   // 严禁在 <style> 上设置与 CSS 根选择器（如 [data-sift-ref-panel]）相同的属性，
   // 否则 <style> 会命中自身规则，把 CSS 文本渲染成可见内容。
-  const disposePanelCss = injectStyle(PLUGIN_ID, 'panel.css', panelCss);
+  const disposePanelCss = injectStyle(SIFT_PLUGIN_ID, 'panel.css', panelCss);
 
   const panel = document.createElement('div');
   panel.dataset.siftRefPanel = '';
@@ -132,6 +135,33 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
     onCardsChange: handleCardsChange,
     pasteBoundary: panel,
     isActive: () => currentDoc !== null,
+    onCardEdit: (id: string) => {
+      const card = currentDoc?.cards.find(c => c.id === id);
+      if (!card || !currentDoc) return;
+      triggerCardEdit(
+        { content: card.content, source: card.source },
+        async (content, source) => {
+          if (!currentDoc) return;
+          currentDoc = {
+            ...currentDoc,
+            cards: currentDoc.cards.map(c => c.id === id
+              ? { ...c, content, ...(source ? { source } : { source: undefined }) }
+              : c),
+          };
+          schedulePersist();
+          canvasApi.refresh();
+        },
+      );
+    },
+    onCardOpenSource: uri => {
+      void (async () => {
+        try {
+          await options.api.openSourcePath(uri);
+        } catch (error) {
+          canvasApi.notify(error instanceof Error ? error.message : '打开文件失败。');
+        }
+      })();
+    },
   });
 
   // mountCanvas 成功后把 DOM 挂进 section；
@@ -160,6 +190,17 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
   if (sectionHeader) sectionHeader.appendChild(editBtn);
 
   const disposeEditor = mountReferenceEditor();
+  const disposeCardEditor = mountCardEditor({
+    pickFilePath: async () => {
+      const result = await options.api.pickSourceFiles();
+      const path = result?.paths?.[0];
+      return {
+        ...(path === undefined ? {} : { path }),
+        ...(result?.cancelled === true ? { cancelled: true } : {}),
+        ...(result?.message === undefined ? {} : { message: result.message }),
+      };
+    },
+  });
 
   const refreshSummaries = async (): Promise<void> => {
     try {
@@ -196,6 +237,7 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
     void persistNow(); // 尽力而为：dispose 前把挂起的修改写掉
     canvasApi.dispose();
     disposeEditor();
+    disposeCardEditor();
     disposePanelCss();
     panel.remove();
   };

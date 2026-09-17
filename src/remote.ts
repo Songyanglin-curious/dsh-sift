@@ -126,6 +126,7 @@ for (const [method, input, output] of [
   ['removeReference', z.object({ workspaceId: z.string(), path: z.string() }), z.object({})],
   ['getDocumentRelations', z.object({ workspaceId: z.string(), target: z.string() }), z.array(z.string())],
   ['setDocumentRelations', z.object({ workspaceId: z.string(), target: z.string(), references: z.array(z.string()) }), z.object({})],
+  ['openSourcePath', z.object({ path: z.string() }), z.object({})],
 ] as const) {
   descriptors.push({ id: `${PACKAGE}#sift/${method}`, service: 'sift', namespace: 'sift', method, implementation: method,
     invocation: { kind: 'direct' }, parameters: [{ name: 'input', wire: 'input', source: 'json', codec: { mode: 'strict', typeSymbol: `${PACKAGE}#${method}Request`, schema: input } }],
