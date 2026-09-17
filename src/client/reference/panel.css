@@ -1,4 +1,4 @@
-/* Reference Panel 样式：轻、画布感；选择器使用原生 <select>。 */
+/* Reference Panel 样式：VS Code 风格 Tab Bar + 下方卡片画布。 */
 
 [data-sift-ref-panel] {
   display: flex;
@@ -9,34 +9,64 @@
   box-sizing: border-box;
 }
 
-[data-sift-ref-hint] {
-  margin: 0;
-  padding: 24px 0;
-  text-align: center;
-  font-size: 13px;
-  color: var(--dsw-alias-label-tertiary, #b3b8bd);
-  user-select: none;
-}
-
 [data-sift-ref-canvas-host] {
   min-height: 0;
 }
 
-/* ── 编辑按钮（✎）在 section header 右侧 ───────────── */
+/* ── Tab Bar ─────────────────────────────────────── */
 
-[data-sift-column='reference'] > header {
+[data-sift-ref-tabs] {
   display: flex;
+  align-items: stretch;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-wrap: nowrap;
+  height: 32px;
+  min-height: 32px;
+  scrollbar-width: thin;
+  gap: 0;
+  border-bottom: 1px solid var(--dsw-alias-border-l4, #e5e7eb);
+}
+
+.sift-ref-tab {
+  flex: 0 0 auto;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
+  height: 100%;
+  padding: 0 14px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, #6b7280);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  min-width: 0;
+  user-select: none;
 }
 
-[data-sift-column='reference'] > header > :last-child {
-  margin-left: auto;
+.sift-ref-tab:hover {
+  color: var(--dsw-alias-label-primary, #111827);
+  background: var(--dsw-alias-bg-raised, #f4f5f6);
 }
 
-[data-sift-ref-edit] {
-  width: 24px;
-  height: 24px;
+.sift-ref-tab[data-active] {
+  color: var(--dsw-alias-label-primary, #111827);
+  border-bottom-color: var(--dsw-alias-brand-primary, #4c8dff);
+}
+
+/* ── Tab Bar 右侧操作按钮 ────────────────────────── */
+
+[data-sift-ref-edit],
+[data-sift-ref-add] {
+  flex: none;
+  width: 26px;
+  height: 26px;
   padding: 0;
   border: none;
   border-radius: 5px;
@@ -45,10 +75,10 @@
   font-size: 13px;
   line-height: 1;
   cursor: pointer;
-  flex: none;
 }
 
-[data-sift-ref-edit]:hover {
+[data-sift-ref-edit]:hover,
+[data-sift-ref-add]:hover {
   background: var(--dsw-alias-bg-raised, #f4f5f6);
   color: var(--dsw-alias-label-primary, #111827);
 }

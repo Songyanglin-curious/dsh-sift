@@ -50,6 +50,74 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   let history = createHistory<ReferenceCardData[]>([]);
 
+  // ── Tab Bar ────────────────────────────────────────
+
+  const tabBar = document.createElement('div');
+  tabBar.dataset.siftRefTabs = '';
+
+  const renderTabs = () => {
+    tabBar.replaceChildren();
+
+    for (const summary of summaries) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'sift-ref-tab';
+      if (summary.path === currentPath) btn.dataset.active = '';
+      btn.title = summary.name;
+      btn.textContent = summary.name;
+      btn.addEventListener('click', () => {
+        if (summary.path !== currentPath) void selectReference(summary.path);
+      });
+      tabBar.appendChild(btn);
+    }
+
+    // spacer —— 把操作按钮推到右侧
+    const spacer = document.createElement('span');
+    spacer.style.cssText = 'flex:1;min-width:8px';
+    tabBar.appendChild(spacer);
+
+    // ✎ 编辑当前参考
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.dataset.siftRefEdit = '';
+    editBtn.title = '编辑参考名称与描述';
+    editBtn.textContent = '✎';
+    editBtn.addEventListener('click', () => {
+      editBtn.blur();
+      if (!currentDoc) return;
+      triggerEdit(currentDoc.name, currentDoc.description, async (name, description) => {
+        if (!currentDoc || !currentPath) return;
+        currentDoc = { ...currentDoc, name, description };
+        const summary = summaries.find(s => s.path === currentPath);
+        if (summary) summary.name = name;
+        schedulePersist();
+        renderTabs();
+      });
+    });
+    tabBar.appendChild(editBtn);
+
+    // ＋ 新建
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.dataset.siftRefAdd = '';
+    addBtn.title = '新建参考';
+    addBtn.textContent = '＋';
+    addBtn.addEventListener('click', () => {
+      addBtn.blur();
+      void (async () => {
+        try {
+          const { path } = await options.api.createReference();
+          await refreshSummaries();
+          renderTabs();
+          await selectReference(path);
+        } catch (error) {
+          console.error('Sift: 新建参考失败', error);
+        }
+      })();
+    });
+    tabBar.appendChild(addBtn);
+  };
+
   // ── DOM ───────────────────────────────────────────────
 
   // 样式注入（head + data-plugin-css 去重，见 inject-style.ts）。
@@ -59,12 +127,6 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
 
   const panel = document.createElement('div');
   panel.dataset.siftRefPanel = '';
-
-  // 无当前参考时的占位提示（画布隐藏）
-  const hint = document.createElement('p');
-  hint.dataset.siftRefHint = '';
-  hint.textContent = '复制内容后，Ctrl+V 粘贴到这里。';
-  hint.hidden = true;
 
   const canvasHost = document.createElement('div');
   canvasHost.dataset.siftRefCanvasHost = '';
@@ -127,7 +189,6 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
   // ── 当前参考切换：先 flush，再加载 ────────────────────
 
   const updateSelectionVisibility = () => {
-    hint.hidden = currentDoc !== null;
     canvasHost.hidden = currentDoc === null;
   };
 
@@ -148,6 +209,7 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
     }
     updateSelectionVisibility();
     canvasApi.refresh();
+    renderTabs();
   };
 
   // ── Canvas（视图 + 交互） ─────────────────────────────
@@ -184,28 +246,12 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
 
   // mountCanvas 成功后把 DOM 挂进 section；
   // 之前任何抛错都保持 section 干净，由调用方回落，避免拖垮三栏布局。
-  panel.append(hint, canvasHost);
+  panel.append(tabBar, canvasHost);
   section.append(panel);
 
-  // ── 编辑按钮（✎）：挂在 layout.ts 创建的 section header 右侧 ──
-  // section 的第一个子节点是 mountThreeColumn 创建的 <header>，
-  // 包含 "Reference Board" 标题与 "当前有效参考" 描述。
-  const sectionHeader = section.querySelector('header');
-  const editBtn = document.createElement('button');
-  editBtn.type = 'button';
-  editBtn.dataset.siftRefEdit = '';
-  editBtn.title = '编辑参考名称与描述';
-  editBtn.textContent = '✎';
-  editBtn.addEventListener('click', () => {
-    editBtn.blur();
-    if (!currentDoc) return;
-    triggerEdit(currentDoc.name, currentDoc.description, async (name, description) => {
-      if (!currentDoc || !currentPath) return;
-      currentDoc = { ...currentDoc, name, description };
-      schedulePersist();
-    });
-  });
-  if (sectionHeader) sectionHeader.appendChild(editBtn);
+  // layout.ts 创建的 section header（Reference Board / 当前有效参考）不再显示标题文字，
+  // 引用管理的入口已移到 tab bar。
+  section.querySelector('header')?.setAttribute('hidden', '');
 
   const disposeEditor = mountReferenceEditor();
   const disposeCardEditor = mountCardEditor({

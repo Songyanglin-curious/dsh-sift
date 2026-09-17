@@ -38,6 +38,7 @@
 - [2026-09-17 15:04] [工作记录] 修复卡片编辑后渲染同步问题 — 修复卡片编辑后渲染不同步：编辑 Modal 保存后调用了 `schedulePersist()` 但没调 `canvasApi.refresh()`，画布仍显示旧卡片内容。panel.ts 的 onCardEdit 回调中补了 `canvasApi.refresh()`。tsc 通过。
 - [2026-09-17 15:13] [工作记录] 来源选择改为 DSH Pill 组件（省一次点击） — 卡片编辑弹窗的来源选择从 `<select>` 改为 DSH 原生 `<Pill>` 组件（无来源/网页/文件，点击即切换），省一次下拉选择操作。删除了 `.sift-card-source-select` CSS 规则。`styles.d.ts` 补了 PillProps 类型。tsc 通过。
 - [2026-09-17 15:51] [工作记录] 实现卡片操作历史（Undo/Redo）+ 统一变更收口 — 实现卡片操作历史 Undo/Redo：新增 src/client/reference/history.ts（createHistory<T> 纯数据层，structuredClone 深拷贝，limit=10 自动丢弃最旧）；新增 tests/history.test.ts（10 用例）；panel.ts 统一卡片变更收口 applyCardsChange(next)→history.record()+canvasApi.refresh()+schedulePersist()，handleUndo/Redo 直接恢复不创建新历史，selectReference 重置 history，Ctrl+Z/Y 键盘监听（dispose 移除）。修正键盘判定：删除按钮被 renderAll() 移除后焦点落到 body，原有 panel.contains(activeElement) 失效——加上 panel.matches(':hover') 兜底，鼠标悬停在面板内即可触发 Ctrl+Z/Y。paste/delete/sort/edit 全部走 applyCardsChange。tsc 通过；待用户宿主机 pnpm test 跑 history 用例。
+- [2026-09-17 17:03] [工作记录] 实现 VS Code 风格 Reference Tab Bar — 实现 Reference Tab Bar（VS Code 风格）：panel.ts 新建 tabBar+renderTabs()，每个 summary 一个 tab，点击切换参考，横向滚动不换行，长名省略 hover 完整显示；tab 右侧 ✎ 编辑当前参考名称（编辑后 tab 名同步）+ ＋ 新建（自动切到新 tab）；删除 hint 与旧 section header 编辑按钮。panel.css 新增 tab bar/button 样式（flex 32px/scrollbar thin/ellipsis/active border-bottom 2px brand-primary），删除 hint/旧 header 样式。tsc 通过。待用户重启 dev 强刷验证。
 
 ## 经验教训 Lessons Learned
 
