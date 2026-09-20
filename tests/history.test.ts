@@ -56,7 +56,6 @@ describe('History', () => {
     expect(h.canUndo()).toBe(false);
     // c 应不可恢复
     expect(h.redo()).toEqual(['a', 'b']);
-    h.redo();
     expect(h.redo()).toEqual(['a', 'b', 'x']);
     expect(h.canRedo()).toBe(false);
   });

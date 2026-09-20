@@ -45,6 +45,8 @@ describe('openPathInEditor', () => {
       editorCommand: 'D:\\Code.exe', platform: 'win32', spawn: spawn as never, isFile: async () => true,
     });
 
+    await Promise.resolve();
+
     expect(spawn).toHaveBeenCalledWith('D:\\Code.exe', ['D:\\a\\b.md'], { detached: true, stdio: 'ignore', windowsHide: true });
     child.emit('spawn');
     await expect(promise).resolves.toBeUndefined();
@@ -56,6 +58,7 @@ describe('openPathInEditor', () => {
     const promise = openPathInEditor('D:\\a\\b.md', {
       editorCommand: 'D:\\nope\\Code.exe', platform: 'win32', spawn: vi.fn(() => child) as never, isFile: async () => true,
     });
+    await Promise.resolve();
     const error = new Error('spawn ENOENT') as NodeJS.ErrnoException;
     error.code = 'ENOENT';
     child.emit('error', error);

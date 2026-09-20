@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -7,6 +7,7 @@ import {
   getDocumentRelations,
   listReferences,
   loadReference,
+  migrateDocumentRelationTargets,
   removeReference,
   removeDocumentRelations,
   saveReference,
@@ -96,13 +97,13 @@ describe('ReferenceStore', () => {
   it('remove 同时从全部 Document 关系中清理目标 Reference', async () => {
     const removed = await createReference(root, '待删除');
     const kept = await createReference(root, '保留');
-    await setDocumentRelations(root, 'documents/one.md', [removed, kept]);
-    await setDocumentRelations(root, 'documents/two.md', [removed]);
+    await setDocumentRelations(root, 'doc-one', [removed, kept]);
+    await setDocumentRelations(root, 'doc-two', [removed]);
 
     await removeReference(root, removed);
 
-    expect(await getDocumentRelations(root, 'documents/one.md')).toEqual([kept]);
-    expect(await getDocumentRelations(root, 'documents/two.md')).toEqual([]);
+    expect(await getDocumentRelations(root, 'doc-one')).toEqual({ exists: true, references: [kept] });
+    expect(await getDocumentRelations(root, 'doc-two')).toEqual({ exists: true, references: [] });
   });
 
   it('拒绝目录穿越与 references/ 之外的路径', async () => {
@@ -117,49 +118,64 @@ describe('Document 关系清理', () => {
   it('删除产出时可同时清除 id 与历史路径关系，不影响其他产出', async () => {
     const reference = await createReference(root, '保留的参考');
     await setDocumentRelations(root, 'doc-1', [reference]);
-    await setDocumentRelations(root, 'notes/旧路径.md', [reference]);
-    await setDocumentRelations(root, 'doc-2', [reference]);
+    await mkdir(join(root, '.sift'), { recursive: true });
+    await writeFile(join(root, '.sift', 'relations.json'), JSON.stringify({ relations: [
+      { target: 'doc-1', references: [reference] },
+      { target: 'notes/旧路径.md', references: [reference] },
+      { target: 'doc-2', references: [reference] },
+    ] }), 'utf8');
     await removeDocumentRelations(root, ['doc-1', 'notes/旧路径.md']);
-    expect(await getDocumentRelations(root, 'doc-1')).toEqual([]);
-    expect(await getDocumentRelations(root, 'notes/旧路径.md')).toEqual([]);
-    expect(await getDocumentRelations(root, 'doc-2')).toEqual([reference]);
+    expect(await getDocumentRelations(root, 'doc-1')).toEqual({ exists: false, references: [] });
+    expect(await getDocumentRelations(root, 'doc-2')).toEqual({ exists: true, references: [reference] });
   });
 });
 
 describe('RelationStore', () => {
-  it('文件缺失时返回空数组', async () => {
-    expect(await getDocumentRelations(root, 'documents/design.md')).toEqual([]);
+  it('文件缺失时明确返回未初始化', async () => {
+    expect(await getDocumentRelations(root, 'doc-design')).toEqual({ exists: false, references: [] });
   });
 
   it('set + get 往返，且一个 Document 可关联多个 Reference', async () => {
     const refA = await createReference(root, 'A');
     const refB = await createReference(root, 'B');
-    await setDocumentRelations(root, 'documents/design.md', [refA, refB]);
-    expect(await getDocumentRelations(root, 'documents/design.md')).toEqual([refA, refB]);
+    await setDocumentRelations(root, 'doc-design', [refA, refB]);
+    expect(await getDocumentRelations(root, 'doc-design')).toEqual({ exists: true, references: [refA, refB] });
   });
 
   it('一个 Reference 可以被多个 Document 复用', async () => {
     const refA = await createReference(root, 'A');
-    await setDocumentRelations(root, 'documents/one.md', [refA]);
-    await setDocumentRelations(root, 'documents/two.md', [refA]);
-    expect(await getDocumentRelations(root, 'documents/one.md')).toEqual([refA]);
-    expect(await getDocumentRelations(root, 'documents/two.md')).toEqual([refA]);
+    await setDocumentRelations(root, 'doc-one', [refA]);
+    await setDocumentRelations(root, 'doc-two', [refA]);
+    expect(await getDocumentRelations(root, 'doc-one')).toEqual({ exists: true, references: [refA] });
+    expect(await getDocumentRelations(root, 'doc-two')).toEqual({ exists: true, references: [refA] });
   });
 
   it('重复 set 同一 target 是覆盖，不是追加', async () => {
     const refA = await createReference(root);
     const refB = await createReference(root);
-    await setDocumentRelations(root, 'documents/x.md', [refA]);
-    await setDocumentRelations(root, 'documents/x.md', [refB]);
-    expect(await getDocumentRelations(root, 'documents/x.md')).toEqual([refB]);
+    await setDocumentRelations(root, 'doc-x', [refA]);
+    await setDocumentRelations(root, 'doc-x', [refB]);
+    expect(await getDocumentRelations(root, 'doc-x')).toEqual({ exists: true, references: [refB] });
   });
 
-  it('set 空数组时移除该条目', async () => {
-    await setDocumentRelations(root, 'documents/x.md', ['references/ab12cd34.json']);
-    await setDocumentRelations(root, 'documents/x.md', []);
-    expect(await getDocumentRelations(root, 'documents/x.md')).toEqual([]);
+  it('set 空数组时保留明确为空的条目', async () => {
+    await setDocumentRelations(root, 'doc-x', ['references/ab12cd34.json']);
+    await setDocumentRelations(root, 'doc-x', []);
+    expect(await getDocumentRelations(root, 'doc-x')).toEqual({ exists: true, references: [] });
     const raw = JSON.parse(await readFile(join(root, '.sift', 'relations.json'), 'utf8')) as { relations: unknown[] };
-    expect(raw.relations).toHaveLength(0);
+    expect(raw.relations).toHaveLength(1);
+  });
+
+  it('首次按 Document id 查询时迁移旧路径 target', async () => {
+    await mkdir(join(root, '.sift'), { recursive: true });
+    await writeFile(join(root, '.sift', 'relations.json'), JSON.stringify({
+      relations: [{ target: 'notes/旧文档.md', references: ['references/deadbeef.json'] }],
+    }), 'utf8');
+    await migrateDocumentRelationTargets(root, [{ id: 'doc-stable', path: 'notes/旧文档.md' }]);
+    expect(await getDocumentRelations(root, 'doc-stable'))
+      .toEqual({ exists: true, references: ['references/deadbeef.json'] });
+    const raw = JSON.parse(await readFile(join(root, '.sift', 'relations.json'), 'utf8')) as { relations: Array<{ target: string }> };
+    expect(raw.relations.map(item => item.target)).toEqual(['doc-stable']);
   });
 
   it('拒绝非法 target', async () => {
@@ -168,13 +184,13 @@ describe('RelationStore', () => {
   });
 
   it('relations.json 里引用不存在的 Reference 不报错（读取方容错）', async () => {
-    await setDocumentRelations(root, 'documents/x.md', ['references/deadbeef.json']);
-    expect(await getDocumentRelations(root, 'documents/x.md')).toEqual(['references/deadbeef.json']);
+    await setDocumentRelations(root, 'doc-x', ['references/deadbeef.json']);
+    expect(await getDocumentRelations(root, 'doc-x')).toEqual({ exists: true, references: ['references/deadbeef.json'] });
   });
 
   it('Reference 文件内容不感知关联关系', async () => {
     const path = await createReference(root, '独立');
-    await setDocumentRelations(root, 'documents/x.md', [path]);
+    await setDocumentRelations(root, 'doc-x', [path]);
     const raw = JSON.parse(await readFile(join(root, '.sift', path), 'utf8')) as Record<string, unknown>;
     expect(Object.keys(raw).sort()).toEqual(['cards', 'description', 'name']);
   });

@@ -3,7 +3,7 @@ import type { TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import { entriesSchema, materialsSchema } from './materials.js';
 import { documentIndexSchema, siftDocumentSchema } from './documents.js';
 import { sourceIndexSchema, sourceSchema } from './sources.js';
-import { referenceDocumentSchema, referenceSummarySchema } from './references.js';
+import { referenceDocumentSchema, relationLookupSchema, referenceSummarySchema } from './references.js';
 
 const profileSchema = z.object({
   workspaceId: z.string(),
@@ -126,7 +126,7 @@ for (const [method, input, output] of [
   ['createReference', z.object({ workspaceId: z.string(), name: z.string().optional() }), z.object({ path: z.string() })],
   ['saveReference', z.object({ workspaceId: z.string(), path: z.string(), reference: referenceDocumentSchema }), z.object({})],
   ['removeReference', z.object({ workspaceId: z.string(), path: z.string() }), z.object({})],
-  ['getDocumentRelations', z.object({ workspaceId: z.string(), target: z.string() }), z.array(z.string())],
+  ['getDocumentRelations', z.object({ workspaceId: z.string(), target: z.string() }), relationLookupSchema],
   ['setDocumentRelations', z.object({ workspaceId: z.string(), target: z.string(), references: z.array(z.string()) }), z.object({})],
   ['openSourcePath', z.object({ path: z.string() }), z.object({})],
 ] as const) {

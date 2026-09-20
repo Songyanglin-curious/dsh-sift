@@ -2,6 +2,7 @@
    布局契约的 DOM 假设集中在 dsh-adapter/selectors.ts 与 dsh-adapter/layout.ts。 */
 
 [data-sift-three-column] {
+  --sift-column-toolbar-height: 76px;
   position: relative;
   display: grid !important;
   grid-template-columns: var(--sift-w0) var(--sift-g0) var(--sift-w1) var(--sift-g1) var(--sift-w2) !important;
@@ -97,6 +98,10 @@
   display: grid;
   gap: 4px;
   box-sizing: border-box;
+}
+
+[data-sift-column] > header[hidden] {
+  display: none;
 }
 
 [data-sift-column] > header > small,

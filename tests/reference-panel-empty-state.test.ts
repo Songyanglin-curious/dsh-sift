@@ -39,13 +39,14 @@ vi.mock('../src/client/reference/ref-selector.js', () => ({
 }));
 
 import { mountReferencePanel, type ReferenceApi } from '../src/client/reference/panel.js';
+import { WorkspaceController } from '../src/client/workspace-controller.js';
 
 const flush = async () => {
   await Promise.resolve();
   await Promise.resolve();
 };
 
-function createFixture(initialReferences?: Array<{ path: string; name: string; description: string }>) {
+function createFixture(initialReferences?: Array<{ path: string; name: string; description: string }>, workspace?: WorkspaceController) {
   const existing = { path: 'references/existing.json', name: '已有参考', description: '' };
   const created = { path: 'references/new.json', name: '未命名参考', description: '', cards: [] };
   const api: ReferenceApi = {
@@ -59,7 +60,7 @@ function createFixture(initialReferences?: Array<{ path: string; name: string; d
   };
   const section = document.createElement('section');
   document.body.append(section);
-  const dispose = mountReferencePanel(section, { api });
+  const dispose = mountReferencePanel(section, { api, ...(workspace ? { workspace } : {}) });
   return { api, section, dispose, existing, created };
 }
 
@@ -176,6 +177,51 @@ describe('ReferencePanel 启动空状态', () => {
     expect(fixture.section.querySelector('.sift-ref-tab-label')?.textContent).toBe(fixture.created.name);
     expect((fixture.section.querySelector('[data-sift-ref-empty]') as HTMLElement).hidden).toBe(true);
 
+    fixture.dispose();
+  });
+
+  it('有活动 Output 时新建 Reference 会写入当前关系', async () => {
+    const relations = new Map([['doc-a', { exists: true, references: [] as string[] }]]);
+    const relationApi = {
+      getDocumentRelations: vi.fn(async ({ target }: { target: string }) => relations.get(target) ?? { exists: false, references: [] }),
+      setDocumentRelations: vi.fn(async ({ target, references }: { target: string; references: string[] }) => {
+        relations.set(target, { exists: true, references: [...references] });
+      }),
+    };
+    const workspace = new WorkspaceController(relationApi);
+    await workspace.setActiveOutput('doc-a');
+    const fixture = createFixture([], workspace);
+    vi.mocked(fixture.api.listReferences).mockResolvedValueOnce([{
+      path: fixture.created.path,
+      name: fixture.created.name,
+      description: fixture.created.description,
+    }]);
+    await flush();
+    (fixture.section.querySelector('[data-sift-ref-add]') as HTMLButtonElement).click();
+    await flush(); await flush();
+    expect(relations.get('doc-a')).toEqual({ exists: true, references: [fixture.created.path] });
+    expect(workspace.snapshot().activeReference).toBe(fixture.created.path);
+    fixture.dispose();
+  });
+
+  it('切换 Output 后左侧 Tabs 只显示该 Output 的关联参考', async () => {
+    const refA = { path: 'references/a.json', name: '参考 A', description: '' };
+    const refB = { path: 'references/b.json', name: '参考 B', description: '' };
+    const relations = new Map([
+      ['doc-a', { exists: true, references: [refA.path] }],
+      ['doc-b', { exists: true, references: [refB.path] }],
+    ]);
+    const workspace = new WorkspaceController({
+      getDocumentRelations: async ({ target }) => relations.get(target) ?? { exists: false, references: [] },
+      setDocumentRelations: async ({ target, references }) => { relations.set(target, { exists: true, references: [...references] }); },
+    });
+    await workspace.setActiveOutput('doc-a');
+    const fixture = createFixture([refA, refB], workspace);
+    await flush(); await flush();
+    expect([...fixture.section.querySelectorAll('.sift-ref-tab-label')].map(item => item.textContent)).toEqual(['参考 A']);
+    await workspace.setActiveOutput('doc-b');
+    await flush(); await flush();
+    expect([...fixture.section.querySelectorAll('.sift-ref-tab-label')].map(item => item.textContent)).toEqual(['参考 B']);
     fixture.dispose();
   });
 });

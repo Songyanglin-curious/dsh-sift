@@ -8,7 +8,7 @@
  *   切换参考与 dispose 前先 flush
  * - Canvas 只做视图与交互，状态回传到这里
  *
- * 关联本文档（多选 + relations.json）在 Step 4 接入。
+ * 可见 Tabs 与 Output → References 关系由 WorkspaceController 统一协调。
  */
 
 import panelCss from './panel.css?inline';
@@ -22,6 +22,7 @@ import { createHistory } from './history.js';
 import type { ReferenceCardData } from '../renderer/card.js';
 import type { ClipboardSnapshot } from '../../host/clipboard/index.js';
 import type { ReferenceDocument, ReferenceSummary } from '../../references.js';
+import type { WorkspaceController } from '../workspace-controller.js';
 
 export interface ReferenceApi {
   listReferences(): Promise<ReferenceSummary[]>;
@@ -41,6 +42,7 @@ export interface ReferencePanelOptions {
   readonly readClipboard?: () => Promise<ClipboardSnapshot>;
   /** 测试可替换；生产默认使用浏览器原生二次确认。 */
   readonly confirmDelete?: (name: string) => boolean;
+  readonly workspace?: WorkspaceController;
 }
 
 const SAVE_DEBOUNCE_MS = 400;
@@ -57,6 +59,9 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
   let deleting = false;
   // 当前工作区中"激活"的 Reference 路径；只有这些会出现在 Tab Bar。
   let freeReferenceTabs: string[] = [];
+  const visiblePaths = (): string[] => options.workspace
+    ? [...options.workspace.snapshot().visibleReferences]
+    : [...freeReferenceTabs];
 
   // ── Tab Bar ────────────────────────────────────────
 
@@ -70,7 +75,8 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
     tabBar.replaceChildren();
 
     // 只显示 freeReferenceTabs 内的 reference
-    const visible = summaries.filter(s => freeReferenceTabs.includes(s.path));
+    const paths = visiblePaths();
+    const visible = summaries.filter(s => paths.includes(s.path));
     for (const summary of visible) {
       const tab = document.createElement('div');
       tab.className = 'sift-ref-tab';
@@ -86,8 +92,7 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
       });
       tab.appendChild(label);
 
-      // 关闭：无 activeOutput 时从 freeReferenceTabs 移除（不删文件）；
-      // 有 activeOutput 时从 relations 解除关联（Step 3 后）。
+      // 关闭只存在于自由模式；有关联 Output 时必须通过“编辑关联”明确修改。
       // 图标几何来自 icons.ts、按钮盒来自 icons.css 的 .sift-icon-button，
       // 这里只保留显隐与 hover 变红；样式一律走类名，data-* 仅作调试锚点。
       const closeBtn = document.createElement('button');
@@ -98,6 +103,10 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
       setIcon(closeBtn, 'close');
       closeBtn.addEventListener('click', (event) => {
         event.stopPropagation();
+        if (options.workspace) {
+          options.workspace.closeFreeReference(summary.path);
+          return;
+        }
         const idx = freeReferenceTabs.indexOf(summary.path);
         if (idx === -1) return;
         freeReferenceTabs.splice(idx, 1);
@@ -117,6 +126,7 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
         }
       });
       tab.appendChild(closeBtn);
+      closeBtn.hidden = options.workspace?.snapshot().activeOutput !== undefined;
 
       tabBar.appendChild(tab);
     }
@@ -143,9 +153,13 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
       addRefBtn!.blur();
       triggerRefSelector({
         all: summaries,
-        checked: freeReferenceTabs,
-        onSave: (selected) => {
-          freeReferenceTabs = selected;
+        checked: [],
+        onSave: async (selected) => {
+          if (options.workspace) {
+            await options.workspace.addReferences(selected);
+            return;
+          }
+          freeReferenceTabs = [...new Set([...freeReferenceTabs, ...selected])];
           // 如果当前 path 不在选中列表，切到第一个选中的或无
           if (currentPath && !freeReferenceTabs.includes(currentPath)) {
             if (freeReferenceTabs.length > 0) {
@@ -212,12 +226,14 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
           const removedIndex = freeReferenceTabs.indexOf(path);
           freeReferenceTabs = freeReferenceTabs.filter(item => item !== path);
           summaries = summaries.filter(item => item.path !== path);
+          options.workspace?.forgetReference(path);
           if (currentPath === path) {
             currentPath = null;
             currentDoc = null;
             history.reset([]);
+            const workspaceNext = options.workspace?.snapshot().activeReference;
             const nextIndex = Math.min(Math.max(removedIndex, 0), freeReferenceTabs.length - 1);
-            const nextPath = nextIndex >= 0 ? freeReferenceTabs[nextIndex] : undefined;
+            const nextPath = workspaceNext ?? (nextIndex >= 0 ? freeReferenceTabs[nextIndex] : undefined);
             if (nextPath) {
               await selectReference(nextPath);
             } else {
@@ -250,6 +266,7 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
         try {
           const { path } = await options.api.createReference();
           await refreshSummaries();
+          await options.workspace?.addReferences([path]);
           renderTabs();
           await selectReference(path);
         } catch (error) {
@@ -341,14 +358,13 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
     emptyState.hidden = currentDoc !== null;
   };
 
-  const selectReference = async (path: string | null): Promise<void> => {
+  const selectReference = async (path: string | null, publishSelection = true): Promise<void> => {
     await persistNow();
     currentPath = path;
     if (path === null) {
       currentDoc = null;
     } else {
-      // 自动加入 freeReferenceTabs（尚未加入时）
-      if (!freeReferenceTabs.includes(path)) freeReferenceTabs.push(path);
+      if (!options.workspace && !freeReferenceTabs.includes(path)) freeReferenceTabs.push(path);
       try {
         currentDoc = await options.api.loadReference(path);
         history.reset([...currentDoc.cards]);
@@ -361,6 +377,7 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
     updateSelectionVisibility();
     canvasApi.refresh();
     renderTabs();
+    if (publishSelection) options.workspace?.setActiveReference(currentPath ?? undefined);
   };
 
   // ── Canvas（视图 + 交互） ─────────────────────────────
@@ -453,20 +470,38 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
     }
   };
 
+  const syncWorkspaceSelection = (): void => {
+    if (!options.workspace) return;
+    const snapshot = options.workspace.snapshot();
+    const existing = new Set(summaries.map(item => item.path));
+    const validVisible = snapshot.visibleReferences.filter(path => existing.has(path));
+    const next = snapshot.activeReference && existing.has(snapshot.activeReference)
+      ? snapshot.activeReference
+      : validVisible[0];
+    if (next !== snapshot.activeReference) options.workspace.setActiveReference(next);
+    if ((next ?? null) !== currentPath) void selectReference(next ?? null, false);
+  };
+
   // 启动时只扫描可选 Reference；创建和打开都由用户显式触发。
   const initialize = async (): Promise<void> => {
     await refreshSummaries();
+    syncWorkspaceSelection();
     renderTabs();
   };
 
   // ── 启动 ──────────────────────────────────────────────
 
   void initialize();
+  const disposeWorkspace = options.workspace?.subscribe(() => {
+    syncWorkspaceSelection();
+    renderTabs();
+  });
 
   // ── 清理：flush → 销毁 ────────────────────────────────
 
   return () => {
     document.removeEventListener('keydown', onKeydown);
+    disposeWorkspace?.();
     void persistNow(); // 尽力而为：dispose 前把挂起的修改写掉
     canvasApi.dispose();
     disposeEditor();

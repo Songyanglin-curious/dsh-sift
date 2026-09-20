@@ -60,9 +60,11 @@ describe('Sift plugin scaffold', () => {
     const methods = descriptors.map(descriptor => descriptor.method).sort();
     // 少一个描述符，客户端调用就会在运行期失败，所以在这里钉住。
     expect(methods).toEqual([
-      'addExternalFiles', 'addMaterial', 'addSource', 'browseExternal', 'browseWorkspace', 'createSourceFile',
-      'getMaterials', 'getWorkspaceProfile', 'listDocuments', 'listMaterialFiles', 'listSources', 'pickSourceFiles',
-      'readDocumentContent', 'readMaterial', 'detachDocument', 'removeDocument', 'removeMaterial', 'removeSource', 'saveDocument', 'setWorkspaceProfile',
+      'addExistingDocument', 'addExternalFiles', 'addMaterial', 'addSource', 'browseExternal', 'browseWorkspace',
+      'createReference', 'createSourceFile', 'detachDocument', 'getDocumentRelations', 'getMaterials', 'getWorkspaceProfile',
+      'listDocuments', 'listMaterialFiles', 'listReferences', 'listSources', 'loadReference', 'openSourcePath',
+      'pickSourceFiles', 'readClipboard', 'readDocumentContent', 'readMaterial', 'removeDocument', 'removeMaterial',
+      'removeReference', 'removeSource', 'saveDocument', 'saveReference', 'setDocumentRelations', 'setWorkspaceProfile',
     ]);
     for (const descriptor of descriptors) {
       expect(descriptor.service).toBe('sift');
@@ -122,3 +124,4 @@ describe('Workspace profile metadata', () => {
     expect(await readWorkspaceProfile(workspace)).toMatchObject({ profile: 'sift', status: 'ready' });
   });
 });
+// @vitest-environment jsdom

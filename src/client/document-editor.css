@@ -11,13 +11,14 @@
   overflow: hidden;
 }
 
-[data-sift-output-tabs] {
+[data-sift-column='document'] > [data-sift-output-tabs] {
   display: flex;
   align-items: stretch;
   flex: none;
-  height: 36px;
+  height: var(--sift-column-toolbar-height, 76px);
   min-width: 0;
   padding: 0 8px;
+  box-sizing: border-box;
   border-bottom: 1px solid var(--dsw-alias-border-l4, #e5e7eb);
   background: var(--dsw-alias-bg-base, #fff);
   overflow-x: auto;
@@ -25,7 +26,7 @@
   scrollbar-width: none;
 }
 
-[data-sift-output-tabs]::-webkit-scrollbar { display: none; }
+[data-sift-column='document'] > [data-sift-output-tabs]::-webkit-scrollbar { display: none; }
 
 .sift-output-tab {
   flex: 0 1 auto;

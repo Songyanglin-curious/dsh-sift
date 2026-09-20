@@ -30,16 +30,17 @@
 - `relations.json` 模型及 `getDocumentRelations`、`setDocumentRelations` Host API。
 - 单 Document Markdown 编辑、自动保存、外部修改检测和未保存保护。
 
-### 2.2 尚未完成
+### 2.2 当前基线（2026-09-20）
 
-- 启动时仍会自动打开已有 Reference；没有 Reference 时仍会自动创建“未命名参考”。
-- `freeReferenceTabs` 只是 Reference 面板内存状态，尚未形成工作区级状态。
-- “添加已有参考”当前是全量多选覆盖，不是纯增量添加。
-- 添加已有 Reference 后不会稳定地自动切换到新增项。
-- Output 仍是单 Document 模型，没有 Output Tabs、添加已有 Output 或显式新建流程。
-- Reference 与 Output 分别挂载，尚无共享状态控制器。
-- Relation Host Store 虽已存在，但客户端尚未消费。
-- 当前完整测试不是全绿，不能把现有能力判定为已完成回归验收。
+- Reference 启动为空状态，创建和添加均由用户明确触发。
+- Output 已有 Tabs、新建、添加已有、切换、移除和物理删除。
+- `WorkspaceController` 按 Workspace 隔离并维护活动对象、自由 Tabs 与可见 References。
+- Relation target 统一为稳定 Document id；Workspace 初始化时迁移旧路径 target。
+- Relation 查询区分“没有记录”和“明确为空”，空关系统一持久化。
+- Output 切换只读取关系；编辑关联、有 Output 时添加或新建 Reference 才显式写关系。
+- 新建 Output 继承切换前可见 References；添加已有 Output 只在关系不存在时初始化。
+- Output 移除/删除和 Reference 删除均清理关系。
+- 完整测试基线已恢复，当前 `pnpm test` 为 22 个文件、199 个用例全部通过。
 
 ## 3. 最终状态模型
 
@@ -56,7 +57,7 @@ interface WorkspaceState {
 
 ```ts
 interface RelationRecord {
-  target: string
+  target: DocumentId
   references: string[]
 }
 ```
@@ -73,7 +74,7 @@ const visibleReferences = activeOutput
 
 ## 4. 实施阶段
 
-### Phase A：收口 Reference 自由工作模式
+### Phase A：收口 Reference 自由工作模式（已实现）
 
 目标：不依赖 Output 和 Relation，先让 Reference 自身形成完整闭环。
 
@@ -107,7 +108,7 @@ const visibleReferences = activeOutput
 - 重新进入同一 Workspace 时按约定恢复自由工作集；不同 Workspace 不串状态。
 - Card 粘贴、编辑、删除、排序和 History 行为不回归。
 
-### Phase B：建立 Workspace Controller
+### Phase B：建立 Workspace Controller（已实现）
 
 目标：让 Reference 和 Output 消费同一个工作区状态，而不是组件互相调用。
 
@@ -142,7 +143,7 @@ const visibleReferences = activeOutput
 - 切换 Workspace 后状态完全隔离。
 - Controller 的状态转移有纯逻辑单元测试。
 
-### Phase C：Output Tabs 与多文档生命周期
+### Phase C：Output Tabs 与多文档生命周期（已实现）
 
 目标：完成 Output 工作集，但暂不接入 Reference Relation。
 
@@ -172,7 +173,7 @@ const visibleReferences = activeOutput
 - 只允许把 `.md` 作为已有 Output 加入。
 - 切换 Output 不调用 `setDocumentRelations`。
 
-### Phase D：接入 Output → References
+### Phase D：接入 Output → References（已实现）
 
 目标：让左侧 Reference Tabs 成为当前 Output 的素材上下文。
 
@@ -205,7 +206,7 @@ const visibleReferences = activeOutput
 - 有 Output 时添加已有 Reference 会增量写入当前关系。
 - 无 Output 时 Reference 仍能独立工作。
 
-### Phase E：Output 初始化与生命周期补齐
+### Phase E：Output 初始化与生命周期补齐（核心规则已实现）
 
 目标：完成首次加入规则以及关闭、重命名、删除后的清理边界。
 
@@ -218,8 +219,8 @@ const visibleReferences = activeOutput
 5. 确实不存在 Relation 记录时，才用捕获结果初始化。
 6. 调整 Relation Store，使“没有记录”和“明确为空的关系”可以区分；禁止用 `[]` 同时表示两种状态。
 7. 实现有 Output 时新建 Reference 自动关联当前 Output。
-8. 实现 Output Tab 关闭，只移出 `outputTabs`，不删除文件。
-9. 实现 Output 重命名后的 Relation target 更新。
+8. 实现 Output“移除”：解除工作区登记与关系但保留文件；物理删除使用独立垃圾桶入口。
+9. Relation 使用 Document id，修改显示标题或文件路径不需要迁移 target。
 10. 实现 Output 删除后的 Relation 清理，并单独确认是否删除物理 `.md`。
 11. 实现 Reference 物理删除后的全量 Relation 清理。
 
@@ -289,3 +290,16 @@ const visibleReferences = activeOutput
 - 添加已有 Output 时只在没有 Relation 记录时初始化。
 - Reference Card 的粘贴、编辑、删除、排序和 History 无回归。
 - 静态检查、完整自动测试、构建和真实 DSH 工作区验证均有明确结果。
+
+## 8. 2026-09-20 执行结果
+
+- Relation target 已统一为稳定 Document id；旧路径 target 在 Workspace 文档初始化时迁移。
+- 查询结果已区分“未初始化”和“明确为空”，空关系会持久化。
+- `WorkspaceController` 成为 Reference / Output 的共享状态入口。
+- Output 切换只读取关系；编辑关联、添加/新建 Reference 使用明确写入口。
+- 新建 Output 继承当前可见 References；添加已有 Output 只在关系不存在时初始化。
+- Output 移除、Output 删除和 Reference 删除均清理关系。
+- `pnpm check`、`pnpm build`、`git diff --check` 通过。
+- `pnpm test`：22 个测试文件、199 个用例全部通过。
+- 开发实例 Host 探针确认 Sift 服务与工具服务已挂载。
+- 真实浏览器验收尚未执行：当前自动化浏览器拒绝访问本机 `9082` 地址；不能用构建或 DOM 测试冒充该项证据。

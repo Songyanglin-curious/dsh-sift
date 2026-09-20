@@ -28,6 +28,7 @@ import { readClipboard } from './clipboard/index.js';
 import {
   createReference as createReferenceRecord,
   getDocumentRelations as readDocumentRelations,
+  migrateDocumentRelationTargets,
   listReferences as listReferenceSummaries,
   loadReference as readReferenceFile,
   removeReference as deleteReferenceFile,
@@ -131,7 +132,12 @@ export class SiftService extends TypertRemoteService {
   async readMaterial(input: { workspaceId: string; id: string }) { return readMaterial(this.workspacePath(input.workspaceId), input.id); }
 
   @Remote
-  async listDocuments(input: { workspaceId: string }) { return readDocumentIndex(this.workspacePath(input.workspaceId)); }
+  async listDocuments(input: { workspaceId: string }) {
+    const root = this.workspacePath(input.workspaceId);
+    const index = await readDocumentIndex(root);
+    await migrateDocumentRelationTargets(root, index.documents);
+    return index;
+  }
 
   @Remote
   async saveDocument(input: { workspaceId: string; documentId: string; title?: string; content: string; targetDirectory?: string }) {
@@ -281,7 +287,8 @@ export class SiftService extends TypertRemoteService {
 
   @Remote
   async getDocumentRelations(input: { workspaceId: string; target: string }) {
-    return readDocumentRelations(this.workspacePath(input.workspaceId), input.target);
+    const root = this.workspacePath(input.workspaceId);
+    return readDocumentRelations(root, input.target);
   }
 
   @Remote

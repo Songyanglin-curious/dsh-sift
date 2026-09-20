@@ -4,9 +4,11 @@ import { TYPERT_REMOTE } from '../remote.js';
 import type { DocumentsApi } from '../documents.js';
 /** 仅类型导入：编译期擦除，koffi 不会进浏览器 bundle。 */
 import type { ClipboardSnapshot } from '../host/clipboard/index.js';
-import type { ReferenceDocument, ReferenceSummary } from '../references.js';
+import type { ReferenceDocument, ReferenceSummary, RelationLookup } from '../references.js';
 import { mountDocumentEditor } from './document-editor.js';
 import { mountReferencePanel } from './reference/panel.js';
+import { triggerRefSelector } from './reference/ref-selector.js';
+import { WorkspaceController } from './workspace-controller.js';
 import { type InputTriggerServiceContract } from './dsh-adapter/input-trigger.js';
 import { mountThreeColumn, type ColumnSpec } from './dsh-adapter/layout.js';
 import { findConversationCenter } from './dsh-adapter/selectors.js';
@@ -39,7 +41,7 @@ interface SiftRemote {
     createReference(input: { workspaceId: string; name?: string }): Promise<{ path: string }>;
     saveReference(input: { workspaceId: string; path: string; reference: ReferenceDocument }): Promise<Record<string, never>>;
     removeReference(input: { workspaceId: string; path: string }): Promise<Record<string, never>>;
-    getDocumentRelations(input: { workspaceId: string; target: string }): Promise<string[]>;
+    getDocumentRelations(input: { workspaceId: string; target: string }): Promise<RelationLookup>;
     setDocumentRelations(input: { workspaceId: string; target: string; references: string[] }): Promise<Record<string, never>>;
     /** Host 的原生文件对话框（在 Host 所在显示器弹出）。 */
     pickSourceFiles(input: Record<string, never>): Promise<{ paths: string[]; cancelled: boolean; message?: string }>;
@@ -159,6 +161,7 @@ export function apply(ctx: ClientContext): void {
     let mountedCenter: HTMLElement | null = null;
     let activeWorkspaceId: string | undefined;
     let disposeLayout: (() => void) | undefined;
+    const workspaceControllers = new Map<string, WorkspaceController>();
     const latestProfile = createLatestProfileReader(id => remoteContext.remote.sift!.getWorkspaceProfile({ workspaceId: id }));
 
     const clearLayout = () => {
@@ -180,6 +183,14 @@ export function apply(ctx: ClientContext): void {
         clearLayout();
         mountedCenter = center;
         activeWorkspaceId = workspace.workspaceId;
+        let workspaceController = workspaceControllers.get(workspace.workspaceId);
+        if (!workspaceController) {
+            workspaceController = new WorkspaceController({
+                getDocumentRelations: ({ target }) => remoteContext.remote.sift!.getDocumentRelations({ workspaceId: workspace.workspaceId, target }),
+                setDocumentRelations: ({ target, references }) => remoteContext.remote.sift!.setDocumentRelations({ workspaceId: workspace.workspaceId, target, references }).then(() => undefined),
+            });
+            workspaceControllers.set(workspace.workspaceId, workspaceController);
+        }
         disposeLayout = mountThreeColumn(center, {
             columns: SIFT_COLUMNS,
             storageKey: layoutStorageKey(workspace.workspaceId),
@@ -197,6 +208,7 @@ export function apply(ctx: ClientContext): void {
                                 openSourcePath: path => remoteContext.remote.sift!.openSourcePath({ path }).then(() => undefined),
                             },
                             readClipboard: () => remoteContext.remote.sift!.readClipboard({}),
+                            workspace: workspaceController,
                         });
                         return () => disposePanel();
                     } catch (error) {
@@ -211,6 +223,14 @@ export function apply(ctx: ClientContext): void {
                     api: documentsApi,
                     pickDirectory: () => ctx.uiWorkspace?.pickDirectory() ?? Promise.resolve(null),
                     pickOutputFiles: () => remoteContext.remote.sift!.pickSourceFiles({}),
+                    workspace: workspaceController,
+                    editRelations: () => {
+                        return remoteContext.remote.sift!.listReferences({ workspaceId: workspace.workspaceId }).then(all => triggerRefSelector({
+                            all,
+                            checked: workspaceController.visibleReferences(),
+                            onSave: selected => workspaceController.replaceActiveRelations(selected),
+                        }));
+                    },
                 }),
         });
     };

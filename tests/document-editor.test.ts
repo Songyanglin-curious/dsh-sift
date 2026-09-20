@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { mountDocumentEditor } from '../src/client/document-editor.js';
 import { documentFileName, type DocumentsApi, type SiftDocument } from '../src/documents.js';
+import { WorkspaceController } from '../src/client/workspace-controller.js';
 
 const mocks = vi.hoisted(() => ({ instances: [] as any[] }));
 vi.mock('@milkdown/crepe', () => ({ Crepe: class {
@@ -85,6 +86,8 @@ function mount(
   pickDirectory?: () => Promise<string | null>,
   pickOutputFiles?: () => Promise<{ paths: readonly string[]; cancelled: boolean }>,
   confirmDelete?: (name: string) => boolean,
+  workspace?: WorkspaceController,
+  editRelations?: () => void,
 ) {
   const section = document.createElement('section');
   const workspaceId = `workspace-${++sequence}`;
@@ -95,6 +98,8 @@ function mount(
     ...(pickDirectory === undefined ? {} : { pickDirectory }),
     ...(pickOutputFiles === undefined ? {} : { pickOutputFiles }),
     ...(confirmDelete === undefined ? {} : { confirmDelete }),
+    ...(workspace === undefined ? {} : { workspace }),
+    ...(editRelations === undefined ? {} : { editRelations }),
     newId: () => created++ === 0 ? `doc-${sequence}` : `doc-${sequence}-${created}`,
   });
   return { section, workspaceId, dispose };
@@ -103,6 +108,25 @@ function mount(
 beforeEach(() => { mocks.instances.length = 0; });
 
 describe('Output 创建', () => {
+  it('新建 Output 继承创建前的可见 Reference 工作集', async () => {
+    const f = fakeHost();
+    const relations = new Map<string, { exists: boolean; references: string[] }>();
+    const relationApi = {
+      getDocumentRelations: vi.fn(async ({ target }: { target: string }) => relations.get(target) ?? { exists: false, references: [] }),
+      setDocumentRelations: vi.fn(async ({ target, references }: { target: string; references: string[] }) => {
+        relations.set(target, { exists: true, references: [...references] });
+      }),
+    };
+    const workspace = new WorkspaceController(relationApi);
+    await workspace.addReferences(['references/a.json']);
+    const view = mount(f, undefined, undefined, undefined, workspace);
+    await tick();
+    await createOutput(view.section, '继承关系');
+    expect(relations.get(`doc-${sequence}`)).toEqual({ exists: true, references: ['references/a.json'] });
+    expect(workspace.snapshot().activeOutput).toBe(`doc-${sequence}`);
+    view.dispose();
+  });
+
   it('打开空工作区时不创建 Draft 或文件，只显示空状态', async () => {
     const f = fakeHost();
     const view = mount(f);
@@ -176,6 +200,18 @@ describe('Output 创建', () => {
 });
 
 describe('已落盘的 Document', () => {
+  it('当前 Output 提供独立的编辑关联入口', async () => {
+    const f = fakeHost({ id: 'doc-a', path: 'notes/A.md', title: 'A', content: '# A' });
+    const editRelations = vi.fn();
+    const view = mount(f, undefined, undefined, undefined, undefined, editRelations);
+    await tick();
+    const button = view.section.querySelector<HTMLButtonElement>('[data-sift-output-edit-relations]')!;
+    expect(button.disabled).toBe(false);
+    button.click();
+    expect(editRelations).toHaveBeenCalledTimes(1);
+    view.dispose();
+  });
+
   it('添加已有 Markdown 后打开原文件，重复添加不会产生重复 Tab', async () => {
     const f = fakeHost();
     f.external('D:\\Notes\\已有.md', '# 已有正文');

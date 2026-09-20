@@ -48,6 +48,16 @@ function context(profile: ProfileResult, workspaceId: string, sessionId: string)
     addExistingDocument: vi.fn(),
     detachDocument: vi.fn(),
     removeDocument: vi.fn(),
+    listReferences: vi.fn(async () => []),
+    loadReference: vi.fn(),
+    createReference: vi.fn(),
+    saveReference: vi.fn(),
+    removeReference: vi.fn(),
+    getDocumentRelations: vi.fn(async () => ({ exists: false, references: [] })),
+    setDocumentRelations: vi.fn(async () => ({})),
+    pickSourceFiles: vi.fn(async () => ({ paths: [], cancelled: true })),
+    readClipboard: vi.fn(async () => ({})),
+    openSourcePath: vi.fn(async () => ({})),
   };
   return {
     slots: { inject: (_name: string, factory: () => unknown) => factory(), register: () => () => {} },
@@ -96,7 +106,7 @@ describe('Sift 界面接线', () => {
     expect(center.hasAttribute('data-sift-three-column')).toBe(true);
     expect(center.querySelector('[data-sift-column="reference"]')).not.toBeNull();
     expect(center.querySelector('[data-sift-column="document"]')).not.toBeNull();
-    expect(center.querySelector('[data-sift-reference-empty]')).not.toBeNull();
+    expect(center.querySelector('[data-sift-ref-empty]')).not.toBeNull();
     // 原生对话节点必须原地保留，只是被排到第三栏。
     expect(center.querySelector('[data-slot="main.conversation"]')).not.toBeNull();
     expect(center.querySelector('[data-slot="main"]')).not.toBeNull();
@@ -135,7 +145,7 @@ describe('Sift 界面接线', () => {
     error.mockRestore();
   });
 
-  it('sift 界面里直接打开未命名的 Document', async () => {
+  it('sift 空工作区显示产出空状态且不创建未命名 Document', async () => {
     page();
     const ids = fresh();
     const ctx = context(profile({ profile: 'sift', status: 'ready' }), ids.workspaceId, ids.sessionId);
@@ -143,8 +153,8 @@ describe('Sift 界面接线', () => {
     await tick(); await tick();
 
     expect(ctx.service.listDocuments).toHaveBeenCalledWith({ workspaceId: ids.workspaceId });
-    expect(mocks.instances).toHaveLength(1);
-    expect(document.querySelector('[data-sift-document-path]')?.textContent).toBe('尚未保存为文件');
+    expect(mocks.instances).toHaveLength(0);
+    expect(document.querySelector('[data-sift-output-empty]')?.textContent).toContain('暂无打开的产出');
     // 没有登记表内容时不应该写任何东西。
     expect(ctx.service.saveDocument).not.toHaveBeenCalled();
   });

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { flushSync } from 'react-dom';
 import { Modal } from '@deepseek-ai/dsh-client-ui-primitives';
 import { isWorkspaceAddButton } from './dsh-adapter/selectors.js';
 import type { ProfileResult } from './dsh-adapter/workspace-entry.js';
@@ -104,7 +105,7 @@ export function installWorkspaceTypeCreator(ctx: CreatorCtx, setProfile: SetProf
   const container = document.createElement('div');
   container.dataset.siftCreator = '';
   const root = createRoot(container);
-  root.render(<CreatorModal ctx={ctx} setProfile={setProfile} />);
+  flushSync(() => root.render(<CreatorModal ctx={ctx} setProfile={setProfile} />));
 
   const onCaptureClick = (event: MouseEvent) => {
     const button = (event.target as HTMLElement).closest('button');

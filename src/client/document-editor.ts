@@ -2,6 +2,7 @@ import editorCss from './document-editor.css?inline';
 import { setIcon } from './icons.js';
 import { createMarkdownSurface } from './markdown-surface.js';
 import { DOCUMENT_DIRECTORY, type DocumentsApi } from '../documents.js';
+import type { WorkspaceController } from './workspace-controller.js';
 import {
   applyEdit,
   canAutosave,
@@ -37,6 +38,8 @@ export interface DocumentEditorOptions {
   readonly pickOutputFiles?: () => Promise<{ paths: readonly string[]; cancelled: boolean; message?: string }>;
   /** 测试可注入；默认使用浏览器确认框。 */
   readonly confirmDelete?: (name: string) => boolean;
+  readonly workspace?: WorkspaceController;
+  readonly editRelations?: () => void | Promise<void>;
 }
 
 interface WorkspaceDocumentSession {
@@ -191,6 +194,21 @@ export function mountDocumentEditor(section: HTMLElement, options: DocumentEdito
     setIcon(addExisting, 'list-plus');
     addExisting.addEventListener('click', () => { void addExistingOutputs(); });
     tabBar.appendChild(addExisting);
+    const editRelations = document.createElement('button');
+    editRelations.type = 'button';
+    editRelations.className = 'sift-icon-button';
+    editRelations.dataset.siftOutputEditRelations = '';
+    editRelations.title = '编辑关联参考';
+    editRelations.setAttribute('aria-label', '编辑关联参考');
+    editRelations.disabled = busy || draft === undefined || !options.editRelations;
+    setIcon(editRelations, 'pencil');
+    editRelations.addEventListener('click', () => {
+      void Promise.resolve(options.editRelations?.()).catch(error => {
+        panelError = `读取参考失败：${error instanceof Error ? error.message : String(error)}`;
+        render();
+      });
+    });
+    tabBar.appendChild(editRelations);
     const detach = document.createElement('button');
     detach.type = 'button';
     detach.className = 'sift-icon-button';
@@ -281,8 +299,13 @@ export function mountDocumentEditor(section: HTMLElement, options: DocumentEdito
         };
         sessions.set(workspaceId, session);
         draft = session.activeId === undefined ? undefined : session.drafts.get(session.activeId);
+        options.workspace?.setOutputTabs(session.tabIds);
       }))
-      .then(() => loadEditor())
+      .then(async () => {
+        options.workspace?.setOutputTabs(session?.tabIds ?? []);
+        await options.workspace?.setActiveOutput(session?.activeId);
+        await loadEditor();
+      })
       .then(() => { busy = false; render(); scheduleSave(); }, error => {
         busy = false;
         render();
@@ -367,6 +390,7 @@ export function mountDocumentEditor(section: HTMLElement, options: DocumentEdito
     if (!next || disposed) return;
     session.activeId = id;
     draft = next;
+    await options.workspace?.setActiveOutput(id);
     busy = true;
     render();
     await loadEditor();
@@ -381,12 +405,14 @@ export function mountDocumentEditor(section: HTMLElement, options: DocumentEdito
     busy = true;
     render();
     try {
+      const inheritedReferences = options.workspace?.visibleReferences() ?? [];
       const picked = await options.pickOutputFiles();
       if (picked.cancelled) return;
       let lastId: string | undefined;
       for (const path of picked.paths) {
         const result = await api.addExistingDocument({ workspaceId, documentId: newId(), path });
         const id = result.document.id;
+        await options.workspace?.initializeOutput(id, inheritedReferences, true);
         if (!session.drafts.has(id)) {
           const content = await api.readDocumentContent({ workspaceId, documentId: id });
           const next = markSaved(createDraft(id, result.document.title ?? '', content.content), {
@@ -397,12 +423,14 @@ export function mountDocumentEditor(section: HTMLElement, options: DocumentEdito
           session.drafts.set(id, next);
           session.registeredIds.add(id);
           session.tabIds.push(id);
+          options.workspace?.setOutputTabs(session.tabIds);
         }
         lastId = id;
       }
       if (lastId !== undefined) {
         session.activeId = lastId;
         draft = session.drafts.get(lastId);
+        await options.workspace?.setActiveOutput(lastId);
         await loadEditor();
       }
     } catch (error) {
@@ -440,11 +468,13 @@ export function mountDocumentEditor(section: HTMLElement, options: DocumentEdito
     if (!session) return;
     const position = session.tabIds.indexOf(id);
     if (position !== -1) session.tabIds.splice(position, 1);
+    options.workspace?.setOutputTabs(session.tabIds);
     session.drafts.delete(id);
     session.registeredIds.delete(id);
     const nextId = session.tabIds[position] ?? session.tabIds[position - 1];
     session.activeId = nextId;
     draft = nextId === undefined ? undefined : session.drafts.get(nextId);
+    await options.workspace?.setActiveOutput(nextId);
     await loadEditor();
   };
 
@@ -498,6 +528,7 @@ export function mountDocumentEditor(section: HTMLElement, options: DocumentEdito
     createSubmit.disabled = true;
     createCancel.disabled = true;
     const id = newId();
+    const inheritedReferences = options.workspace?.visibleReferences() ?? [];
     try {
       const result = await api.saveDocument({
         workspaceId,
@@ -514,8 +545,11 @@ export function mountDocumentEditor(section: HTMLElement, options: DocumentEdito
       session.registeredIds.add(id);
       session.drafts.set(next.id, next);
       session.tabIds.push(next.id);
+      options.workspace?.setOutputTabs(session.tabIds);
       session.activeId = next.id;
       draft = next;
+      await options.workspace?.initializeOutput(next.id, inheritedReferences, false);
+      await options.workspace?.setActiveOutput(next.id);
       closeCreateDialog();
       render();
       await loadEditor();

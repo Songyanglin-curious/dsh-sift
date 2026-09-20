@@ -1,6 +1,6 @@
 /**
- * 多选参考弹窗：展现全部 Reference，已选对应 freeReferenceTabs。
- * 保存后同步 freeReferenceTabs 并触发重新渲染。
+ * 通用 Reference 多选弹窗：添加已有参考与编辑 Output 关联共用视图，
+ * 但具体是增量添加还是全量覆盖由调用方明确决定。
  */
 
 import { useEffect, useState } from 'react';
@@ -11,7 +11,7 @@ import { injectStyle, SIFT_PLUGIN_ID } from '../renderer/inject-style.js';
 interface RefSelectorInitial {
   all: readonly { path: string; name: string }[];
   checked: string[];
-  onSave: (selected: string[]) => void;
+  onSave: (selected: string[]) => void | Promise<void>;
 }
 
 let currentInitial: RefSelectorInitial | null = null;
@@ -55,7 +55,7 @@ function RefSelectorModal() {
     setError(undefined);
     try {
       if (!currentInitial) throw new Error('状态未初始化。');
-      currentInitial.onSave([...checked]);
+      await currentInitial.onSave([...checked]);
       close();
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存失败。');

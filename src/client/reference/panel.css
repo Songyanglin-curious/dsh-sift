@@ -4,9 +4,14 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 14px;
+  padding: 0 14px 14px;
   min-height: 100%;
   box-sizing: border-box;
+}
+
+/* 与右侧原生对话的“会话标题 + 对话/轨迹 Tab”顶部区域共用同一基线。 */
+section > [data-sift-ref-panel] {
+  padding: 0 14px 14px;
 }
 
 [data-sift-ref-canvas-host] {
@@ -21,8 +26,8 @@
   overflow-x: auto;
   overflow-y: hidden;
   flex-wrap: nowrap;
-  height: 32px;
-  min-height: 32px;
+  height: var(--sift-column-toolbar-height, 76px);
+  min-height: var(--sift-column-toolbar-height, 76px);
   scrollbar-width: thin;
   gap: 0;
   border-bottom: 1px solid var(--dsw-alias-border-l4, #e5e7eb);

@@ -50,10 +50,10 @@ function resolveReferencePath(root: string, path: string): string {
   return target;
 }
 
-/** relations 的 target 是工作区相对路径；只做形状守卫，不要求文件已存在。 */
+/** 新关系统一使用稳定 Document id；兼容读取时仍可迁移旧路径 target。 */
 function assertSafeRelationTarget(target: string): void {
-  if (target.trim() === '' || isAbsolute(target) || target.split(/[\\/]/).includes('..')) {
-    throw new Error(`非法的 Document 路径：${target}`);
+  if (target.trim() === '' || target.includes('/') || target.includes('\\')) {
+    throw new Error(`非法的 Document id：${target}`);
   }
 }
 
@@ -143,7 +143,7 @@ export async function removeReference(root: string, path: string): Promise<void>
     const relations = await readRelationFile(root);
     const next = relations.relations
       .map(entry => ({ ...entry, references: entry.references.filter(reference => reference !== path) }))
-      .filter(entry => entry.references.length > 0);
+      ;
     if (JSON.stringify(next) !== JSON.stringify(relations.relations)) {
       // 先清关系再删文件：即使文件删除失败，也不会产生悬挂关系。
       await writeTextAtomic(relationsFile(root), `${JSON.stringify({ relations: next }, null, 2)}\n`);
@@ -154,10 +154,39 @@ export async function removeReference(root: string, path: string): Promise<void>
 
 // ── RelationStore（独立于 ReferenceStore） ────────────
 
-export async function getDocumentRelations(root: string, target: string): Promise<string[]> {
+export async function getDocumentRelations(
+  root: string,
+  target: string,
+): Promise<{ exists: boolean; references: string[] }> {
   assertSafeRelationTarget(target);
   const file = await readRelationFile(root);
-  return file.relations.find(entry => entry.target === target)?.references ?? [];
+  const current = file.relations.find(entry => entry.target === target);
+  return current
+    ? { exists: true, references: [...current.references] }
+    : { exists: false, references: [] };
+}
+
+/** Workspace 初始化时一次性把历史路径 target 迁移成稳定 Document id。 */
+export async function migrateDocumentRelationTargets(
+  root: string,
+  documents: readonly { id: string; path: string | null }[],
+): Promise<void> {
+  await serialize(root, async () => {
+    const file = await readRelationFile(root);
+    const ids = new Set(documents.map(document => document.id));
+    const byPath = new Map(documents.flatMap(document => document.path ? [[document.path, document.id] as const] : []));
+    const stableTargets = new Set(file.relations.filter(entry => ids.has(entry.target)).map(entry => entry.target));
+    let changed = false;
+    const next = file.relations.flatMap(entry => {
+      const id = byPath.get(entry.target);
+      if (!id) return [entry];
+      changed = true;
+      if (stableTargets.has(id)) return [];
+      stableTargets.add(id);
+      return [{ ...entry, target: id }];
+    });
+    if (changed) await writeTextAtomic(relationsFile(root), `${JSON.stringify({ relations: next }, null, 2)}\n`);
+  });
 }
 
 export async function setDocumentRelations(root: string, target: string, references: string[]): Promise<void> {
@@ -169,9 +198,7 @@ export async function setDocumentRelations(root: string, target: string, referen
   await serialize(root, async () => {
     const file = await readRelationFile(root);
     const others = file.relations.filter(entry => entry.target !== target);
-    const next = references.length === 0
-      ? others
-      : [...others, { target, references: [...references] }];
+    const next = [...others, { target, references: [...new Set(references)] }];
     await writeTextAtomic(relationsFile(root), `${JSON.stringify({ relations: next }, null, 2)}\n`);
   });
 }
