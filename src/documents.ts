@@ -54,7 +54,11 @@ export function documentRelativePath(title: string): string {
 export interface DocumentsApi {
   listDocuments(input: { workspaceId: string }): Promise<DocumentIndex>;
   /** 首次保存（path 为 null）时由 Host 分配路径；之后写回同一路径。 */
-  saveDocument(input: { workspaceId: string; documentId: string; title?: string; content: string }): Promise<{ index: DocumentIndex; document: SiftDocument; created: boolean }>;
+  saveDocument(input: { workspaceId: string; documentId: string; title?: string; content: string; targetDirectory?: string }): Promise<{ index: DocumentIndex; document: SiftDocument; created: boolean }>;
   readDocumentContent(input: { workspaceId: string; documentId: string }): Promise<{ content: string; path: string }>;
+  addExistingDocument(input: { workspaceId: string; documentId: string; path: string }): Promise<{ index: DocumentIndex; document: SiftDocument; added: boolean }>;
+  /** 只解除工作区登记，保留磁盘文件。 */
+  detachDocument(input: { workspaceId: string; documentId: string }): Promise<DocumentIndex>;
+  /** 删除工作区登记及对应的磁盘文件。 */
   removeDocument(input: { workspaceId: string; documentId: string }): Promise<DocumentIndex>;
 }

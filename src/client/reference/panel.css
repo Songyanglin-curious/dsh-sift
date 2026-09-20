@@ -32,53 +32,93 @@
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
   height: 100%;
-  padding: 0 14px;
-  border: none;
+  padding-left: 10px;
+  padding-right: 0;
   border-bottom: 2px solid transparent;
+  cursor: pointer;
+  user-select: none;
+}
+
+.sift-ref-tab:hover {
+  background: var(--dsw-alias-bg-raised, #f4f5f6);
+}
+
+.sift-ref-tab[data-active] {
+  border-bottom-color: var(--dsw-alias-brand-primary, #4c8dff);
+}
+
+/* 标签名称（可点击切换） */
+.sift-ref-tab-label {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  height: 100%;
+  padding: 0 6px;
+  border: none;
   background: transparent;
   color: var(--dsw-alias-label-secondary, #6b7280);
   font: inherit;
   font-size: 12px;
   line-height: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   cursor: pointer;
-  min-width: 0;
-  user-select: none;
 }
 
-.sift-ref-tab:hover {
+.sift-ref-tab:hover .sift-ref-tab-label,
+.sift-ref-tab[data-active] .sift-ref-tab-label {
   color: var(--dsw-alias-label-primary, #111827);
-  background: var(--dsw-alias-bg-raised, #f4f5f6);
 }
 
-.sift-ref-tab[data-active] {
-  color: var(--dsw-alias-label-primary, #111827);
-  border-bottom-color: var(--dsw-alias-brand-primary, #4c8dff);
+/* 关闭按钮：默认隐藏，hover 到 tab 或 tab 活跃时显示。
+   尺寸与按钮盒全部来自 icons.css 的 .sift-icon-button（24×24），这里只控制显隐与 hover 变红。 */
+.sift-ref-tab-close {
+  opacity: 0;
+  visibility: hidden;
 }
 
-/* ── Tab Bar 右侧操作按钮 ────────────────────────── */
+.sift-ref-tab:hover .sift-ref-tab-close,
+.sift-ref-tab[data-active] .sift-ref-tab-close {
+  opacity: 1;
+  visibility: visible;
+}
 
-[data-sift-ref-edit],
-[data-sift-ref-add] {
+/* 上下文前缀把特异性提到 0-3-0，稳定压过 icons.css 的 .sift-icon-button:hover（0-2-0），
+   不依赖两个 <style> 的注入顺序。 */
+[data-sift-ref-panel] .sift-ref-tab-close:hover {
+  background: var(--dsw-alias-state-error-bg, #fee2e2);
+  color: var(--dsw-alias-state-error-primary, #e5484d);
+}
+
+/* ── Tab Bar 右侧操作区 ──────────────────────────── */
+
+/* 三个操作按钮共用 .sift-icon-button 的 24×24 盒与 16px 图标，这里只负责成组与间距。
+   align-self: center 是必需的：父容器 [data-sift-ref-tabs] 是 align-items: stretch，
+   有确定高度的子项会被贴到 cross-start，按钮会顶到 Tab Bar 上沿。 */
+.sift-ref-tab-actions {
+  display: flex;
+  align-items: center;
+  align-self: center;
   flex: none;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border: none;
-  border-radius: 5px;
-  background: transparent;
+  gap: 4px;
+  padding-left: 6px;
+}
+
+[data-sift-ref-panel] [data-sift-ref-delete]:not(:disabled):hover {
+  background: var(--dsw-alias-state-error-bg, #fee2e2);
+  color: var(--dsw-alias-state-error-primary, #e5484d);
+}
+
+[data-sift-ref-empty] {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  place-items: center;
   color: var(--dsw-alias-label-tertiary, #9ca3af);
   font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
 }
 
-[data-sift-ref-edit]:hover,
-[data-sift-ref-add]:hover {
-  background: var(--dsw-alias-bg-raised, #f4f5f6);
-  color: var(--dsw-alias-label-primary, #111827);
+[data-sift-ref-empty][hidden] {
+  display: none;
 }

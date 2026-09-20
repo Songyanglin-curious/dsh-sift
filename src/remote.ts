@@ -70,9 +70,11 @@ for (const [method, input, output] of [
 
 for (const [method, input, output] of [
   ['listDocuments', z.object({ workspaceId: z.string() }), documentIndexSchema],
-  ['saveDocument', z.object({ workspaceId: z.string(), documentId: z.string(), title: z.string().optional(), content: z.string() }),
+  ['saveDocument', z.object({ workspaceId: z.string(), documentId: z.string(), title: z.string().optional(), content: z.string(), targetDirectory: z.string().optional() }),
     z.object({ index: documentIndexSchema, document: siftDocumentSchema, created: z.boolean() })],
   ['readDocumentContent', z.object({ workspaceId: z.string(), documentId: z.string() }), z.object({ content: z.string(), path: z.string() })],
+  ['addExistingDocument', z.object({ workspaceId: z.string(), documentId: z.string(), path: z.string() }), z.object({ index: documentIndexSchema, document: siftDocumentSchema, added: z.boolean() })],
+  ['detachDocument', z.object({ workspaceId: z.string(), documentId: z.string() }), documentIndexSchema],
   ['removeDocument', z.object({ workspaceId: z.string(), documentId: z.string() }), documentIndexSchema],
 ] as const) {
   descriptors.push({ id: `${PACKAGE}#sift/${method}`, service: 'sift', namespace: 'sift', method, implementation: method,

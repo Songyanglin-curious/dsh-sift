@@ -45,6 +45,8 @@ function context(profile: ProfileResult, workspaceId: string, sessionId: string)
     listDocuments: vi.fn(async () => ({ schemaVersion: 1 as const, documents: [] })),
     saveDocument: vi.fn(),
     readDocumentContent: vi.fn(),
+    addExistingDocument: vi.fn(),
+    detachDocument: vi.fn(),
     removeDocument: vi.fn(),
   };
   return {

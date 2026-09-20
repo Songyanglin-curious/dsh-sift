@@ -13,7 +13,7 @@ declare module '*?raw' { const content: string; export default content; }
  * - Input：原生 input 属性 + 前置 icon
  */
 declare module '@deepseek-ai/dsh-client-ui-primitives' {
-  import type { ButtonHTMLAttributes, ComponentType, InputHTMLAttributes, ReactNode, SVGProps } from 'react';
+  import type { ButtonHTMLAttributes, ComponentType, InputHTMLAttributes, ReactNode } from 'react';
 
   interface ModalProps {
     open: boolean;
@@ -48,11 +48,8 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     disabled?: boolean;
   }
 
-  type IconProps = SVGProps<SVGSVGElement> & { size?: number };
-
   export const Modal: ComponentType<ModalProps>;
   export const Button: ComponentType<ButtonProps>;
   export const Input: ComponentType<InputProps>;
   export const Pill: ComponentType<PillProps>;
-  export const IconEditOutline16: ComponentType<IconProps>;
 }

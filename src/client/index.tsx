@@ -29,6 +29,8 @@ interface SiftRemote {
     listDocuments: DocumentsApi['listDocuments'];
     saveDocument: DocumentsApi['saveDocument'];
     readDocumentContent: DocumentsApi['readDocumentContent'];
+    addExistingDocument: DocumentsApi['addExistingDocument'];
+    detachDocument: DocumentsApi['detachDocument'];
     removeDocument: DocumentsApi['removeDocument'];
     /** 读取 Windows 原生剪贴板快照（Host 端 koffi 实现）。 */
     readClipboard(input: Record<string, never>): Promise<ClipboardSnapshot>;
@@ -123,6 +125,8 @@ export function apply(ctx: ClientContext): void {
         listDocuments: async input => unwrap(await (await mounted).listDocuments(input)),
         saveDocument: async input => unwrap(await (await mounted).saveDocument(input)),
         readDocumentContent: async input => unwrap(await (await mounted).readDocumentContent(input)),
+        addExistingDocument: async input => unwrap(await (await mounted).addExistingDocument(input)),
+        detachDocument: async input => unwrap(await (await mounted).detachDocument(input)),
         removeDocument: async input => unwrap(await (await mounted).removeDocument(input)),
     };
     const siftRemote = {
@@ -188,6 +192,7 @@ export function apply(ctx: ClientContext): void {
                                 loadReference: path => remoteContext.remote.sift!.loadReference({ workspaceId: workspace.workspaceId, path }),
                                 createReference: name => remoteContext.remote.sift!.createReference({ workspaceId: workspace.workspaceId, name }),
                                 saveReference: (path, reference) => remoteContext.remote.sift!.saveReference({ workspaceId: workspace.workspaceId, path, reference }).then(() => undefined),
+                                removeReference: path => remoteContext.remote.sift!.removeReference({ workspaceId: workspace.workspaceId, path }).then(() => undefined),
                                 pickSourceFiles: () => remoteContext.remote.sift!.pickSourceFiles({}),
                                 openSourcePath: path => remoteContext.remote.sift!.openSourcePath({ path }).then(() => undefined),
                             },
@@ -201,7 +206,12 @@ export function apply(ctx: ClientContext): void {
                         return () => { section.textContent = ''; };
                     }
                 })()
-                : mountDocumentEditor(section, { workspaceId: workspace.workspaceId, api: documentsApi }),
+                : mountDocumentEditor(section, {
+                    workspaceId: workspace.workspaceId,
+                    api: documentsApi,
+                    pickDirectory: () => ctx.uiWorkspace?.pickDirectory() ?? Promise.resolve(null),
+                    pickOutputFiles: () => remoteContext.remote.sift!.pickSourceFiles({}),
+                }),
         });
     };
 

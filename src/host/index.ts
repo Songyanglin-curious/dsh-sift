@@ -8,6 +8,8 @@ import { createDocumentChangeStore, createDocumentChangeTool } from './document/
 import {
   readDocumentIndex,
   readDocumentText,
+  addExistingDocument as addExistingDocumentFile,
+  detachDocument as detachDocumentFile,
   removeDocument as unregisterDocument,
   saveDocument as saveDocumentFile,
 } from './document/store.js';
@@ -29,6 +31,7 @@ import {
   listReferences as listReferenceSummaries,
   loadReference as readReferenceFile,
   removeReference as deleteReferenceFile,
+  removeDocumentRelations,
   saveReference as writeReferenceFile,
   setDocumentRelations as writeDocumentRelations,
 } from './reference/store.js';
@@ -131,11 +134,12 @@ export class SiftService extends TypertRemoteService {
   async listDocuments(input: { workspaceId: string }) { return readDocumentIndex(this.workspacePath(input.workspaceId)); }
 
   @Remote
-  async saveDocument(input: { workspaceId: string; documentId: string; title?: string; content: string }) {
+  async saveDocument(input: { workspaceId: string; documentId: string; title?: string; content: string; targetDirectory?: string }) {
     const root = this.workspacePath(input.workspaceId);
     return saveDocumentFile(root, {
       id: input.documentId,
       ...(input.title === undefined ? {} : { title: input.title }),
+      ...(input.targetDirectory === undefined ? {} : { targetDirectory: input.targetDirectory }),
       content: input.content,
     });
   }
@@ -149,10 +153,29 @@ export class SiftService extends TypertRemoteService {
     return { content: await readDocumentText(root, document.path), path: document.path };
   }
 
-  /** 只解除登记，不删除磁盘文件（实施文档 §30）。 */
+  @Remote
+  async addExistingDocument(input: { workspaceId: string; documentId: string; path: string }) {
+    return addExistingDocumentFile(this.workspacePath(input.workspaceId), { id: input.documentId, path: input.path });
+  }
+
+  @Remote
+  async detachDocument(input: { workspaceId: string; documentId: string }) {
+    const root = this.workspacePath(input.workspaceId);
+    const before = await readDocumentIndex(root);
+    const document = before.documents.find(item => item.id === input.documentId);
+    const index = await detachDocumentFile(root, input.documentId);
+    await removeDocumentRelations(root, [input.documentId, document?.path ?? '']);
+    return index;
+  }
+
   @Remote
   async removeDocument(input: { workspaceId: string; documentId: string }) {
-    return unregisterDocument(this.workspacePath(input.workspaceId), input.documentId);
+    const root = this.workspacePath(input.workspaceId);
+    const before = await readDocumentIndex(root);
+    const document = before.documents.find(item => item.id === input.documentId);
+    const index = await unregisterDocument(root, input.documentId);
+    await removeDocumentRelations(root, [input.documentId, document?.path ?? '']);
+    return index;
   }
 
   @Remote

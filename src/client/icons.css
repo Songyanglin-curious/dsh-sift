@@ -1,0 +1,55 @@
+/* Sift 图标按钮基类：全插件唯一的图标尺寸事实源。
+   业务 CSS 只覆盖颜色与上下文差异，不再重复写 width/height/font-size，
+   否则尺寸又会像旧实现那样在 20/22/26 之间漂移。 */
+
+.sift-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary, #9ca3af);
+  cursor: pointer;
+}
+
+.sift-icon-button:hover {
+  background: var(--dsw-alias-bg-raised, #f4f5f6);
+  color: var(--dsw-alias-label-primary, #111827);
+}
+
+.sift-icon-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.sift-icon-button:disabled:hover {
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary, #9ca3af);
+}
+
+/* 图标不参与基线排版，避免 inline 元素的底部空隙把按钮撑高。 */
+.sift-icon-button > svg {
+  display: block;
+}
+
+/* 非按钮的纯图标热区（卡片拖拽把手、卡片来源）：只给尺寸与颜色，不给按钮盒。
+   给它们套 24×24 盒会把卡片首行从 22px 抬到 24px、底行从 11px 抬到 24px，
+   整张卡片约高 15px。 */
+.sift-icon-plain {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--dsw-alias-label-tertiary, #9ca3af);
+}
+
+.sift-icon-plain > svg {
+  display: block;
+}

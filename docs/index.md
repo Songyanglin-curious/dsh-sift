@@ -1,5 +1,10 @@
 # 文档索引
 
+## 执行计划
+
+- [计划索引](plan/index.md)：当前待执行方案与实施顺序。
+- [Reference / Output 联动下一步计划](plan/reference-output-workflow.md)：从 Reference Step 1 收口到 Output Tabs、Relations 和生命周期补齐的分阶段执行方案。
+
 ## v0.2
 
 - [v0.2 设计方案](v0.2-design.md)：把 Sift 重构为 DSH Workspace Profile，Source → Reference → Document 工作流、三个核心对象、界面与成功标准。

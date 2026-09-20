@@ -62,7 +62,7 @@ describe('Sift plugin scaffold', () => {
     expect(methods).toEqual([
       'addExternalFiles', 'addMaterial', 'addSource', 'browseExternal', 'browseWorkspace', 'createSourceFile',
       'getMaterials', 'getWorkspaceProfile', 'listDocuments', 'listMaterialFiles', 'listSources', 'pickSourceFiles',
-      'readDocumentContent', 'readMaterial', 'removeDocument', 'removeMaterial', 'removeSource', 'saveDocument', 'setWorkspaceProfile',
+      'readDocumentContent', 'readMaterial', 'detachDocument', 'removeDocument', 'removeMaterial', 'removeSource', 'saveDocument', 'setWorkspaceProfile',
     ]);
     for (const descriptor of descriptors) {
       expect(descriptor.service).toBe('sift');

@@ -81,6 +81,22 @@ export interface OpenDocument {
   readonly registered: boolean;
 }
 
+/** 打开工作区登记的全部 Document；空工作区创建一个不落盘的 Untitled Draft。 */
+export async function openWorkspaceDocuments(api: DocumentsApi, workspaceId: string, newId: () => string): Promise<OpenDocument[]> {
+  const index = await api.listDocuments({ workspaceId });
+  if (index.documents.length === 0) return [];
+  return Promise.all(index.documents.map(async document => {
+    if (document.path === null) {
+      return { draft: createDraft(document.id, document.title ?? ''), registered: false };
+    }
+    const { content, path } = await api.readDocumentContent({ workspaceId, documentId: document.id });
+    return {
+      draft: { id: document.id, path, title: document.title ?? '', markdown: content, baseline: content, disk: content, dirty: false, saving: false },
+      registered: true,
+    };
+  }));
+}
+
 /**
  * 打开一个工作区的当前 Document。
  *
@@ -88,18 +104,8 @@ export interface OpenDocument {
  * 登记表为空时返回一个全新的 Untitled Document（不写磁盘）。
  */
 export async function openCurrentDocument(api: DocumentsApi, workspaceId: string, newId: () => string): Promise<OpenDocument> {
-  const index = await api.listDocuments({ workspaceId });
-  const first = index.documents[0];
-  if (!first) return { draft: createDraft(newId()), registered: false };
-  if (first.path === null) {
-    // 登记表里理论不会有 path 为 null 的记录；真出现时按未落盘处理，不猜文件。
-    return { draft: createDraft(first.id, first.title ?? ''), registered: false };
-  }
-  const { content, path } = await api.readDocumentContent({ workspaceId, documentId: first.id });
-  return {
-    draft: { id: first.id, path, title: first.title ?? '', markdown: content, baseline: content, disk: content, dirty: false, saving: false },
-    registered: true,
-  };
+  return (await openWorkspaceDocuments(api, workspaceId, newId))[0]
+    ?? { draft: createDraft(newId()), registered: false };
 }
 
 export type { SiftDocument };

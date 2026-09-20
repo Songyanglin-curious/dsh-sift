@@ -8,6 +8,7 @@ import {
   listReferences,
   loadReference,
   removeReference,
+  removeDocumentRelations,
   saveReference,
   setDocumentRelations,
 } from '../src/host/reference/store.js';
@@ -92,11 +93,36 @@ describe('ReferenceStore', () => {
     expect(await listReferences(root)).toHaveLength(0);
   });
 
+  it('remove 同时从全部 Document 关系中清理目标 Reference', async () => {
+    const removed = await createReference(root, '待删除');
+    const kept = await createReference(root, '保留');
+    await setDocumentRelations(root, 'documents/one.md', [removed, kept]);
+    await setDocumentRelations(root, 'documents/two.md', [removed]);
+
+    await removeReference(root, removed);
+
+    expect(await getDocumentRelations(root, 'documents/one.md')).toEqual([kept]);
+    expect(await getDocumentRelations(root, 'documents/two.md')).toEqual([]);
+  });
+
   it('拒绝目录穿越与 references/ 之外的路径', async () => {
     await expect(loadReference(root, '../sources.json')).rejects.toThrow('非法');
     await expect(loadReference(root, 'relations.json')).rejects.toThrow('非法');
     await expect(loadReference(root, 'references/sub/../../x.json')).rejects.toThrow('非法');
     await expect(saveReference(root, 'references/..\\evil.json', emptyReferenceDocument())).rejects.toThrow('非法');
+  });
+});
+
+describe('Document 关系清理', () => {
+  it('删除产出时可同时清除 id 与历史路径关系，不影响其他产出', async () => {
+    const reference = await createReference(root, '保留的参考');
+    await setDocumentRelations(root, 'doc-1', [reference]);
+    await setDocumentRelations(root, 'notes/旧路径.md', [reference]);
+    await setDocumentRelations(root, 'doc-2', [reference]);
+    await removeDocumentRelations(root, ['doc-1', 'notes/旧路径.md']);
+    expect(await getDocumentRelations(root, 'doc-1')).toEqual([]);
+    expect(await getDocumentRelations(root, 'notes/旧路径.md')).toEqual([]);
+    expect(await getDocumentRelations(root, 'doc-2')).toEqual([reference]);
   });
 });
 

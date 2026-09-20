@@ -136,10 +136,20 @@ export async function saveReference(root: string, path: string, document: Refere
   await serialize(root, () => writeTextAtomic(file, `${JSON.stringify(validated, null, 2)}\n`));
 }
 
-/** 只删除文件；relations 里的悬挂引用由读取方过滤（规格未定义级联删除，不顺手扩展）。 */
+/** 删除 Reference 文件，并从全部 Document 关系中移除该路径。 */
 export async function removeReference(root: string, path: string): Promise<void> {
   const file = resolveReferencePath(root, path);
-  await serialize(root, () => rm(file, { force: true }));
+  await serialize(root, async () => {
+    const relations = await readRelationFile(root);
+    const next = relations.relations
+      .map(entry => ({ ...entry, references: entry.references.filter(reference => reference !== path) }))
+      .filter(entry => entry.references.length > 0);
+    if (JSON.stringify(next) !== JSON.stringify(relations.relations)) {
+      // 先清关系再删文件：即使文件删除失败，也不会产生悬挂关系。
+      await writeTextAtomic(relationsFile(root), `${JSON.stringify({ relations: next }, null, 2)}\n`);
+    }
+    await rm(file, { force: true });
+  });
 }
 
 // ── RelationStore（独立于 ReferenceStore） ────────────
@@ -163,5 +173,18 @@ export async function setDocumentRelations(root: string, target: string, referen
       ? others
       : [...others, { target, references: [...references] }];
     await writeTextAtomic(relationsFile(root), `${JSON.stringify({ relations: next }, null, 2)}\n`);
+  });
+}
+
+/** 删除 Document 后清除以 id 或历史路径为 target 的关系记录。 */
+export async function removeDocumentRelations(root: string, targets: readonly string[]): Promise<void> {
+  const targetSet = new Set(targets.filter(Boolean));
+  if (targetSet.size === 0) return;
+  await serialize(root, async () => {
+    const file = await readRelationFile(root);
+    const next = file.relations.filter(entry => !targetSet.has(entry.target));
+    if (next.length !== file.relations.length) {
+      await writeTextAtomic(relationsFile(root), `${JSON.stringify({ relations: next }, null, 2)}\n`);
+    }
   });
 }

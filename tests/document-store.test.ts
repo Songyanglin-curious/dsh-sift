@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -6,6 +6,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   readDocumentIndex,
   readDocumentText,
+  addExistingDocument,
+  detachDocument,
   removeDocument,
   resolveInsideWorkspace,
   saveDocument,
@@ -44,14 +46,43 @@ describe('Document 登记表', () => {
     expect(await readFile(join(root, '.sift', 'documents.json'), 'utf8')).toBe('{broken');
   });
 
-  it('移除只解除登记，磁盘文件保持不变', async () => {
+  it('删除登记时同时删除磁盘文件', async () => {
     const saved = await saveDocument(root, { id: 'doc-1', title: '保留我', content: '# 正文' });
     const path = saved.document.path!;
     expect(existsSync(join(root, path))).toBe(true);
     const index = await removeDocument(root, 'doc-1');
     expect(index.documents).toHaveLength(0);
+    expect(existsSync(join(root, path))).toBe(false);
+  });
+
+  it('移除登记时保留磁盘文件', async () => {
+    const saved = await saveDocument(root, { id: 'doc-detach', title: '保留文件', content: '# 正文' });
+    const path = saved.document.path!;
+    const index = await detachDocument(root, 'doc-detach');
+    expect(index.documents).toHaveLength(0);
     expect(existsSync(join(root, path))).toBe(true);
     expect(await readDocumentText(root, path)).toBe('# 正文');
+  });
+
+  it('添加已有 Markdown 时登记原绝对路径且不复制文件', async () => {
+    const external = await mkdtemp(join(tmpdir(), 'sift-existing-output-'));
+    const path = join(external, '已有.md');
+    await writeFile(path, '# 已有', 'utf8');
+    const first = await addExistingDocument(root, { id: 'doc-existing', path });
+    const duplicate = await addExistingDocument(root, { id: 'doc-other', path });
+    expect(first.added).toBe(true);
+    expect(first.document).toEqual({ id: 'doc-existing', path, title: '已有.md' });
+    expect(duplicate.added).toBe(false);
+    expect(duplicate.document.id).toBe('doc-existing');
+    expect((await readDocumentIndex(root)).documents).toHaveLength(1);
+    expect(await readFile(path, 'utf8')).toBe('# 已有');
+    await rm(external, { recursive: true, force: true });
+  });
+
+  it('拒绝把非 Markdown 文件加入产出', async () => {
+    const path = join(root, '文本.txt');
+    await writeFile(path, 'x', 'utf8');
+    await expect(addExistingDocument(root, { id: 'doc-txt', path })).rejects.toThrow('只能添加 Markdown');
   });
 });
 
@@ -85,6 +116,20 @@ describe('首次落盘', () => {
     await mkdir(join(root, 'notes'), { recursive: true });
     await writeFile(join(root, 'notes', '占用.md'), 'x', 'utf8');
     expect(await uniqueDocumentPath(root, '占用')).toBe('notes/占用 2.md');
+  });
+
+  it('显式选择外部绝对目录时在该目录创建并登记真实路径', async () => {
+    const external = await mkdtemp(join(tmpdir(), 'sift-output-external-'));
+    const result = await saveDocument(root, { id: 'doc-external', title: '外部.md', content: '# 外部', targetDirectory: external });
+    expect(result.document.path).toBe(join(external, '外部.md'));
+    expect(await readFile(join(external, '外部.md'), 'utf8')).toBe('# 外部');
+    expect(await readDocumentText(root, result.document.path!)).toBe('# 外部');
+    await rm(external, { recursive: true, force: true });
+  });
+
+  it('拒绝把相对路径冒充自定义保存目录', async () => {
+    await expect(saveDocument(root, { id: 'bad-dir', title: 'x', content: '', targetDirectory: '../outside' }))
+      .rejects.toThrow('绝对路径');
   });
 });
 
