@@ -1,0 +1,22 @@
+[data-sift-thought-quick] { position: fixed; z-index: 80; padding: 4px 9px; border: 1px solid var(--dsw-alias-border-l3, #d1d5db); border-radius: 12px; background: var(--dsw-alias-bg-base, #fff); color: var(--dsw-alias-label-primary, #111827); font: inherit; font-size: 12px; cursor: pointer; }
+[data-sift-thought-quick]:hover { background: var(--dsw-alias-bg-raised, #f3f4f6); }
+[data-sift-thought-editor] { box-sizing: border-box; position: fixed; z-index: 81; width: min(340px, calc(100vw - 24px)); padding: 10px; border: 1px solid var(--dsw-alias-border-l3, #d1d5db); border-radius: 8px; background: var(--dsw-alias-bg-base, #fff); box-shadow: 0 8px 24px rgb(0 0 0 / 16%); }
+[data-sift-thought-editor] small { display: block; overflow: hidden; margin-bottom: 8px; color: var(--dsw-alias-label-tertiary, #8b919a); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+[data-sift-thought-editor] textarea { box-sizing: border-box; width: 100%; min-height: 66px; resize: vertical; padding: 7px 8px; border: 1px solid var(--dsw-alias-border-l3, #d1d5db); border-radius: 6px; background: inherit; color: inherit; font: inherit; font-size: 13px; outline: none; }
+[data-sift-thought-editor] textarea:focus { border-color: var(--dsw-alias-brand-primary, #4c8dff); }
+[data-sift-thought-editor] footer { display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px; }
+[data-sift-thought-editor] button { padding: 4px 10px; border: 1px solid var(--dsw-alias-border-l3, #d1d5db); border-radius: 6px; background: transparent; color: inherit; font: inherit; font-size: 12px; cursor: pointer; }
+[data-sift-thought-editor] button[type='submit'] { border-color: var(--dsw-alias-brand-primary, #4c8dff); background: var(--dsw-alias-brand-primary, #4c8dff); color: #fff; }
+[data-sift-thought-dock] { padding: 7px 10px; border: 1px solid var(--dsw-alias-border-l4, #e5e7eb); border-radius: 8px; background: var(--dsw-alias-bg-base, #fff); }
+.sift-thought-heading { margin-bottom: 5px; color: var(--dsw-alias-label-secondary, #6b7280); font-size: 12px; font-weight: 500; }
+.sift-thought-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 3px 6px; min-height: 28px; padding: 5px 0; }
+.sift-thought-row + .sift-thought-row { border-top: 1px solid var(--dsw-alias-border-l4, #e5e7eb); }
+.sift-thought-area { overflow: hidden; color: var(--dsw-alias-brand-primary, #4c8dff); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.sift-thought-selection { grid-column: 1 / -1; overflow: hidden; color: var(--dsw-alias-label-tertiary, #8b919a); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.sift-thought-text { grid-column: 1 / -1; overflow: hidden; color: var(--dsw-alias-label-primary, #111827); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.sift-thought-row button { width: 24px; height: 24px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--dsw-alias-label-tertiary, #8b919a); cursor: pointer; }
+.sift-thought-row button:hover { background: var(--dsw-alias-bg-raised, #f3f4f6); color: var(--dsw-alias-label-primary, #111827); }
+.sift-thought-edit { grid-column: 1 / -1; display: grid; gap: 6px; padding: 4px 0 8px; }
+.sift-thought-edit textarea { min-height: 54px; resize: vertical; padding: 6px 8px; border: 1px solid var(--dsw-alias-border-l3, #d1d5db); border-radius: 6px; background: inherit; color: inherit; font: inherit; font-size: 12px; }
+.sift-thought-edit div { display: flex; justify-content: flex-end; gap: 6px; }
+.sift-thought-edit button { width: auto; padding: 0 8px; }

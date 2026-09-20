@@ -3,6 +3,7 @@ import { setIcon } from './icons.js';
 import { createMarkdownSurface } from './markdown-surface.js';
 import { DOCUMENT_DIRECTORY, type DocumentsApi } from '../documents.js';
 import type { WorkspaceController } from './workspace-controller.js';
+import { installSelectionCapture, type ThoughtFeature } from './thoughts/index.js';
 import {
   applyEdit,
   canAutosave,
@@ -39,6 +40,7 @@ export interface DocumentEditorOptions {
   /** 测试可注入；默认使用浏览器确认框。 */
   readonly confirmDelete?: (name: string) => boolean;
   readonly workspace?: WorkspaceController;
+  readonly thoughts?: ThoughtFeature;
   readonly editRelations?: () => void | Promise<void>;
 }
 
@@ -122,6 +124,11 @@ export function mountDocumentEditor(section: HTMLElement, options: DocumentEdito
   createForm.append(createHeading, createLabel, createLocation, chooseDirectory, createError, createActions);
   createDialog.append(createForm);
   section.replaceChildren(style, tabBar, root, emptyState, createDialog);
+  const disposeThoughtSelection = options.thoughts
+    ? installSelectionCapture(root, 'output', () => draft
+        ? { sourceId: draft.id, sourceName: draftTitle(draft) }
+        : undefined, options.thoughts.capture)
+    : undefined;
 
   let mounted = false;
   let disposed = false;
@@ -604,6 +611,7 @@ export function mountDocumentEditor(section: HTMLElement, options: DocumentEdito
     clearTimeout(saveTimer);
     disposed = true;
     window.removeEventListener('beforeunload', beforeUnload);
+    disposeThoughtSelection?.();
     // 未保存的编辑保留在 drafts 里，切换工作区再回来仍然可见。
     void ready.then(() => editor?.destroy()).catch(error => console.error('Sift editor cleanup failed', error));
   };

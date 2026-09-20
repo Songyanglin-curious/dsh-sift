@@ -9,6 +9,7 @@ import { mountDocumentEditor } from './document-editor.js';
 import { mountReferencePanel } from './reference/panel.js';
 import { triggerRefSelector } from './reference/ref-selector.js';
 import { WorkspaceController } from './workspace-controller.js';
+import { installThoughtFeature, type ThoughtFeatureHost } from './thoughts/index.js';
 import { type InputTriggerServiceContract } from './dsh-adapter/input-trigger.js';
 import { mountThreeColumn, type ColumnSpec } from './dsh-adapter/layout.js';
 import { findConversationCenter } from './dsh-adapter/selectors.js';
@@ -50,9 +51,9 @@ interface SiftRemote {
 }
 
 interface ClientContext {
-    slots: { inject(name: string, factory: () => unknown): unknown; register(options: { name: string; id?: string; key?: string; order?: number }, component: ComponentType): () => void }
+    slots: { inject(name: string, factory: () => unknown): unknown; register(options: { name: string; id?: string; key?: string; order?: number; inject?: (sessionId: string) => Record<string, unknown> }, component: ComponentType | unknown): () => void }
     workspaces?: { list: Source<WorkspaceSnapshot>; create(input: { path: string }): Promise<WorkspaceView> }
-    sessions?: { list: Source<SessionSnapshot> }
+    sessions?: { list: Source<SessionSnapshot>; scope(sessionId: string): { bail(...args: unknown[]): unknown } | undefined }
     uiWorkspace?: { pickDirectory(): Promise<string | null>; openWorkspace(workspaceId: string): Promise<void> }
     inputTriggers?: InputTriggerServiceContract
     remote: { $mount(contribution: typeof TYPERT_REMOTE): Promise<() => void | Promise<void>>; sift?: SiftRemote }
@@ -156,6 +157,9 @@ export function apply(ctx: ClientContext): void {
 
     const disposeCreator = installWorkspaceTypeCreator(ctx, input => remoteContext.remote.sift!.setWorkspaceProfile(input));
     ctx.effect?.(() => disposeCreator, 'sift: workspace type creator');
+    const thoughts = ctx.inputTriggers && ctx.sessions
+        ? installThoughtFeature(ctx as unknown as ThoughtFeatureHost)
+        : undefined;
 
     let generation = 0;
     let mountedCenter: HTMLElement | null = null;
@@ -209,6 +213,7 @@ export function apply(ctx: ClientContext): void {
                             },
                             readClipboard: () => remoteContext.remote.sift!.readClipboard({}),
                             workspace: workspaceController,
+                            thoughts,
                         });
                         return () => disposePanel();
                     } catch (error) {
@@ -224,6 +229,7 @@ export function apply(ctx: ClientContext): void {
                     pickDirectory: () => ctx.uiWorkspace?.pickDirectory() ?? Promise.resolve(null),
                     pickOutputFiles: () => remoteContext.remote.sift!.pickSourceFiles({}),
                     workspace: workspaceController,
+                    thoughts,
                     editRelations: () => {
                         return remoteContext.remote.sift!.listReferences({ workspaceId: workspace.workspaceId }).then(all => triggerRefSelector({
                             all,
