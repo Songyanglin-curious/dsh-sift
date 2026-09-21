@@ -144,3 +144,6 @@ vite.config.ts.timestamp-*
 
 # Local isolated DSH development and package verification
 .debug/
+
+# Local Sift workspace data
+.sift/
