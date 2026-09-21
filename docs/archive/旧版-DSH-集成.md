@@ -1,5 +1,7 @@
 # DSH 集成说明
 
+> 旧版说明：本文描述已经退出主线的解决方案、项目会话和批注发送模型，不能作为当前 Sift 集成说明。
+
 ## 最低兼容边界
 
 当前开发基线是 DSH `0.1.3-alpha.2` 源码工作树，并需要三项尚未发布的接口：`shell.surface` 组合布局、`conversation.submissions` 原生发送扩展、以及 Agent 工具的最终 `confine` 能力约束。开发脚本要求显式设置 `SIFT_DSH_SOURCE`，避免误用全局安装版本。

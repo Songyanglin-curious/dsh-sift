@@ -1,5 +1,7 @@
 # Workspace 类型最小实验实现与验证
 
+> 历史实验记录：后续工作区类型创建和 Sift 三栏已经继续演进。
+
 实现基于 DSH 0.1.5-rc.2 的公开 Workspace Registry、Session 列表和 Typert Remote。Host 只按原生 Workspace ID 查路径，再读取该路径下的 `.sift/config.json`；缺失配置是 `default`，合法 `schemaVersion: 1/profile: sift` 是 `sift`，损坏或未知格式返回可理解错误并保持 default，读取过程不会写回文件。
 
 Client 计划在 root 级 `sidebar.footer.action` 插槽显示当前工作区标题和类型。它订阅原生工作区和会话状态，通过当前会话 ID 与 `sessionIds` 反查归属。每次归属改变都会重新请求 Host；请求清理函数丢弃快速切换产生的旧响应，因此不会复用上一工作区类型。Client 包声明 `immediately: true`，保证没有其他插件依赖 Sift 时也会主动加载。
