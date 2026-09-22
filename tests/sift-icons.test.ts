@@ -19,6 +19,7 @@ const ICONS_CSS = readFileSync(resolve(process.cwd(), 'src/client/icons.css'), '
 const ICONS_DECLARATIONS = ICONS_CSS.replace(/\/\*[\s\S]*?\*\//g, '');
 
 const PANEL_TS = readFileSync(resolve(process.cwd(), 'src/client/reference/panel.ts'), 'utf8');
+const CONVERSATION_VIEW_TS = readFileSync(resolve(process.cwd(), 'src/client/reference/conversation-view.ts'), 'utf8');
 const PANEL_CSS = readFileSync(resolve(process.cwd(), 'src/client/reference/panel.css'), 'utf8');
 
 /** 把代码里的 `dataset.fooBar = ...` 还原成浏览器真实生成的属性名 data-foo-bar。 */
@@ -118,7 +119,7 @@ describe('样式钩子与 DOM 属性一致（防 data-* 命名漂移）', () => 
   const EXTERNAL_HOOKS = new Set(['data-plugin', 'data-plugin-css', 'data-active']);
 
   it('panel.css 引用的每个 data-* 属性都真的会被 panel.ts 设置', () => {
-    const set = datasetAttributes(PANEL_TS);
+    const set = datasetAttributes(`${PANEL_TS}\n${CONVERSATION_VIEW_TS}`);
     const missing = [...cssAttributes(PANEL_CSS)].filter(attr => !set.has(attr) && !EXTERNAL_HOOKS.has(attr));
     // 这里曾经出过 bug：CSS 写 [data-sift-ref-addref]，而 dataset.siftRefAddRef 生成的是
     // data-sift-ref-add-ref，规则永不命中 → 按钮回落 UA 样式、被拉伸成 33×32。

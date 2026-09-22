@@ -24,12 +24,17 @@ import type { ClipboardSnapshot } from '../../host/clipboard/index.js';
 import type { ReferenceDocument, ReferenceSummary } from '../../references.js';
 import type { WorkspaceController } from '../workspace-controller.js';
 import { installSelectionCapture, type ThoughtFeature } from '../thoughts/index.js';
+import { mountConversationView } from './conversation-view.js';
+import type { CardReferenceDocument } from '../../references.js';
 
 export interface ReferenceApi {
   listReferences(): Promise<ReferenceSummary[]>;
   loadReference(path: string): Promise<ReferenceDocument>;
   createReference(name?: string): Promise<{ path: string }>;
+  importConversationReference(sourcePath: string): Promise<{ path: string }>;
   saveReference(path: string, reference: ReferenceDocument): Promise<void>;
+  analyzeConversation(path: string, anchorGroupId: string): Promise<ReferenceDocument>;
+  analyzeConversationTopic(path: string, topic: string): Promise<ReferenceDocument>;
   removeReference(path: string): Promise<void>;
   /** Host 的原生文件对话框（多选）；卡片来源只取第一个路径。 */
   pickSourceFiles(): Promise<{ paths: readonly string[]; cancelled: boolean; message?: string }>;
@@ -59,6 +64,8 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   let history = createHistory<ReferenceCardData[]>([]);
   let deleting = false;
+  let disposeConversationView: (() => void) | undefined;
+  const cardDocument = (): CardReferenceDocument | null => currentDoc && 'cards' in currentDoc ? currentDoc : null;
   // 当前工作区中"激活"的 Reference 路径；只有这些会出现在 Tab Bar。
   let freeReferenceTabs: string[] = [];
   const visiblePaths = (): string[] => options.workspace
@@ -179,6 +186,32 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
     });
     actions.appendChild(addRefBtn);
 
+    const importConversationBtn = document.createElement('button');
+    importConversationBtn.type = 'button';
+    importConversationBtn.className = 'sift-icon-button';
+    importConversationBtn.dataset.siftConversationImport = '';
+    importConversationBtn.title = '导入会话参考';
+    importConversationBtn.setAttribute('aria-label', '导入会话参考');
+    setIcon(importConversationBtn, 'file');
+    importConversationBtn.addEventListener('click', () => {
+      void (async () => {
+        const selected = await options.api.pickSourceFiles();
+        const sourcePath = selected.paths[0];
+        if (!sourcePath) return;
+        try {
+          const { path } = await options.api.importConversationReference(sourcePath);
+          await refreshSummaries();
+          await options.workspace?.addReferences([path]);
+          if (!options.workspace) freeReferenceTabs = [...new Set([...freeReferenceTabs, path])];
+          await selectReference(path);
+        } catch (error) {
+          console.error('Sift: 导入会话失败', error);
+          canvasApi.notify(error instanceof Error ? error.message : '导入会话失败。');
+        }
+      })();
+    });
+    actions.appendChild(importConversationBtn);
+
     // 编辑当前参考
     const editBtn = document.createElement('button');
     editBtn.type = 'button';
@@ -216,7 +249,7 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
       const path = currentPath;
       const name = currentDoc.name;
       const confirmed = options.confirmDelete?.(name)
-        ?? window.confirm(`删除参考“${name}”？\n\n这会永久删除该参考及其中的所有卡片，并从相关产出的关联中移除。此操作无法撤销。`);
+        ?? window.confirm(`删除参考“${name}”？\n\n这会永久删除该参考及其中的全部内容，并从相关产出的关联中移除。此操作无法撤销。`);
       if (!confirmed) return;
       void (async () => {
         deleting = true;
@@ -294,6 +327,9 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
   const canvasHost = document.createElement('div');
   canvasHost.dataset.siftRefCanvasHost = '';
 
+  const conversationHost = document.createElement('div');
+  conversationHost.dataset.siftConversationHost = '';
+
   const emptyState = document.createElement('div');
   emptyState.dataset.siftRefEmpty = '';
   emptyState.textContent = '暂无打开的参考';
@@ -330,25 +366,28 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
   // ── 统一卡片变更收口 & Undo / Redo ────────────────
 
   const applyCardsChange = (next: readonly ReferenceCardData[]) => {
-    if (!currentDoc) return;
+    const card = cardDocument();
+    if (!card) return;
     history.record([...next]);
-    currentDoc = { ...currentDoc, cards: [...next] };
+    currentDoc = { ...card, cards: [...next] };
     canvasApi.refresh();
     schedulePersist();
   };
 
   const handleUndo = () => {
     const prev = history.undo();
-    if (prev === null || !currentDoc) return;
-    currentDoc = { ...currentDoc, cards: prev };
+    const card = cardDocument();
+    if (prev === null || !card) return;
+    currentDoc = { ...card, cards: prev };
     canvasApi.refresh();
     schedulePersist();
   };
 
   const handleRedo = () => {
     const next = history.redo();
-    if (next === null || !currentDoc) return;
-    currentDoc = { ...currentDoc, cards: next };
+    const card = cardDocument();
+    if (next === null || !card) return;
+    currentDoc = { ...card, cards: next };
     canvasApi.refresh();
     schedulePersist();
   };
@@ -356,8 +395,39 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
   // ── 当前参考切换：先 flush，再加载 ────────────────────
 
   const updateSelectionVisibility = () => {
-    canvasHost.hidden = currentDoc === null;
+    const isConversation = currentDoc !== null && 'kind' in currentDoc && currentDoc.kind === 'conversation';
+    canvasHost.hidden = currentDoc === null || isConversation;
+    conversationHost.hidden = !isConversation;
     emptyState.hidden = currentDoc !== null;
+    disposeConversationView?.();
+    disposeConversationView = undefined;
+    if (isConversation && currentDoc && 'groups' in currentDoc) {
+      disposeConversationView = mountConversationView(conversationHost, currentDoc, next => {
+        currentDoc = next;
+        schedulePersist();
+        updateSelectionVisibility();
+      }, async anchorGroupId => {
+        if (!currentPath) return;
+        try {
+          currentDoc = await options.api.analyzeConversation(currentPath, anchorGroupId);
+          updateSelectionVisibility();
+        } catch (error) {
+          canvasApi.notify(error instanceof Error ? error.message : '会话关联分析失败。');
+          throw error;
+        }
+      }, async topic => {
+        if (!currentPath) return;
+        try {
+          currentDoc = await options.api.analyzeConversationTopic(currentPath, topic);
+          updateSelectionVisibility();
+        } catch (error) {
+          canvasApi.notify(error instanceof Error ? error.message : '会话主题分析失败。');
+          throw error;
+        }
+      });
+    } else {
+      conversationHost.replaceChildren();
+    }
   };
 
   const selectReference = async (path: string | null, publishSelection = true): Promise<void> => {
@@ -369,7 +439,7 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
       if (!options.workspace && !freeReferenceTabs.includes(path)) freeReferenceTabs.push(path);
       try {
         currentDoc = await options.api.loadReference(path);
-        history.reset([...currentDoc.cards]);
+        history.reset('cards' in currentDoc ? [...currentDoc.cards] : []);
       } catch (error) {
         console.error('Sift: 加载参考失败', error);
         currentDoc = null;
@@ -385,19 +455,21 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
   // ── Canvas（视图 + 交互） ─────────────────────────────
 
   const canvasApi = mountCanvas(canvasHost, {
-    readCards: () => currentDoc?.cards ?? [],
+    readCards: () => cardDocument()?.cards ?? [],
     ...(options.readClipboard === undefined ? {} : { readClipboard: options.readClipboard }),
     onCardsChange: applyCardsChange,
     pasteBoundary: panel,
     isActive: () => currentDoc !== null,
     onCardEdit: (id: string) => {
-      const card = currentDoc?.cards.find(c => c.id === id);
-      if (!card || !currentDoc) return;
+      const document = cardDocument();
+      const card = document?.cards.find(c => c.id === id);
+      if (!card || !document) return;
       triggerCardEdit(
         { content: card.content, source: card.source },
         async (content, source) => {
-          if (!currentDoc) return;
-          applyCardsChange(currentDoc.cards.map(c => c.id === id
+          const latest = cardDocument();
+          if (!latest) return;
+          applyCardsChange(latest.cards.map(c => c.id === id
             ? { ...c, content, ...(source ? { source } : { source: undefined }) }
             : c));
         },
@@ -416,7 +488,7 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
 
   // mountCanvas 成功后把 DOM 挂进 section；
   // 之前任何抛错都保持 section 干净，由调用方回落，避免拖垮三栏布局。
-  panel.append(tabBar, canvasHost, emptyState);
+  panel.append(tabBar, canvasHost, conversationHost, emptyState);
   section.append(panel);
   updateSelectionVisibility();
 
@@ -518,6 +590,7 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
     document.removeEventListener('keydown', onKeydown);
     disposeWorkspace?.();
     disposeThoughtSelection?.();
+    disposeConversationView?.();
     void persistNow(); // 尽力而为：dispose 前把挂起的修改写掉
     canvasApi.dispose();
     disposeEditor();

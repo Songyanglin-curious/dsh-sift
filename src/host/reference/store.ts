@@ -12,6 +12,7 @@ import {
   type ReferenceDocument,
   type ReferenceSummary,
 } from '../../references.js';
+import { parseConversationMarkdown } from '../conversation/parser.js';
 import { isMissingFile, serialize, writeTextAtomic } from '../storage/workspace-files.js';
 
 /**
@@ -83,7 +84,12 @@ export async function listReferences(root: string): Promise<ReferenceSummary[]> 
       const document = referenceDocumentSchema.parse(
         JSON.parse(await readFile(resolve(directory, entry), 'utf8')),
       );
-      summaries.push({ path: `${REFERENCES_DIRECTORY}/${entry}`, name: document.name, description: document.description });
+      summaries.push({
+        path: `${REFERENCES_DIRECTORY}/${entry}`,
+        name: document.name,
+        description: document.description,
+        kind: 'kind' in document && document.kind === 'conversation' ? 'conversation' : 'cards',
+      });
     } catch {
       // 单个损坏文件不阻断列表（本阶段不做 index；未来规模大了再加缓存）。
     }
@@ -126,6 +132,18 @@ export async function createReference(root: string, name?: string): Promise<stri
     });
     const filePath = resolve(directory, fileName);
     await writeTextAtomic(filePath, `${JSON.stringify(document, null, 2)}\n`);
+    return `${REFERENCES_DIRECTORY}/${fileName}`;
+  });
+}
+
+/** 把支持的 Markdown 会话快照导入为独立 Conversation Reference。 */
+export async function importConversationReference(root: string, sourcePath: string): Promise<string> {
+  return serialize(root, async () => {
+    const directory = await ensureReferencesDirectory(root);
+    const content = await readFile(sourcePath, 'utf8');
+    const document = parseConversationMarkdown({ content, sourcePath });
+    const fileName = await unusedReferenceFileName(directory);
+    await writeTextAtomic(resolve(directory, fileName), `${JSON.stringify(document, null, 2)}\n`);
     return `${REFERENCES_DIRECTORY}/${fileName}`;
   });
 }

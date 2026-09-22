@@ -1,10 +1,11 @@
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   createReference,
   getDocumentRelations,
+  importConversationReference,
   listReferences,
   loadReference,
   migrateDocumentRelationTargets,
@@ -68,7 +69,18 @@ describe('ReferenceStore', () => {
     for (const summary of summaries) {
       expect(summary.path).toMatch(/^references\/[0-9a-f]{8}\.json$/);
       expect(summary.description).toBe('');
+      expect(summary.kind).toBe('cards');
     }
+  });
+
+  it('导入 Conversation Reference 并与卡片参考共同出现在列表', async () => {
+    await createReference(root, '卡片参考');
+    const sourcePath = resolve('tests', '对话测试', '评估思路可行性-gpt.md');
+    const conversationPath = await importConversationReference(root, sourcePath);
+    const conversation = await loadReference(root, conversationPath);
+    expect('kind' in conversation && conversation.kind).toBe('conversation');
+    const summaries = await listReferences(root);
+    expect(summaries.map(item => item.kind).sort()).toEqual(['cards', 'conversation']);
   });
 
   it('list 跳过损坏的文件，不阻断面板', async () => {

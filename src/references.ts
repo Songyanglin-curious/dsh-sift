@@ -39,14 +39,74 @@ export const referenceCardSchema = z.object({
 });
 export type ReferenceCard = z.infer<typeof referenceCardSchema>;
 
-export const referenceDocumentSchema = z.object({
+export const cardReferenceDocumentSchema = z.object({
   name: z.string(),
   description: z.string(),
   cards: z.array(referenceCardSchema),
 });
+export type CardReferenceDocument = z.infer<typeof cardReferenceDocumentSchema>;
+
+export const conversationContextDependencySchema = z.enum(['standalone', 'needs_previous', 'unknown']);
+export const conversationRelevanceSchema = z.enum(['strong', 'related', 'weak', 'none']);
+export const conversationContinuitySchema = z.enum(['continues_previous', 'returns_to_anchor', 'context_only', 'none']);
+
+export const conversationAnalysisItemSchema = z.object({
+  groupId: z.string(),
+  relevance: conversationRelevanceSchema,
+  continuity: conversationContinuitySchema,
+  contextDependency: conversationContextDependencySchema,
+  evidenceGroupIds: z.array(z.string()),
+  reason: z.string(),
+});
+export type ConversationAnalysisItem = z.infer<typeof conversationAnalysisItemSchema>;
+
+export const conversationAnalysisSchema = z.object({
+  anchorGroupId: z.string().optional(),
+  topic: z.string().optional(),
+  model: z.object({ provider: z.string(), model: z.string(), reasoningEffort: z.string().optional() }),
+  createdAt: z.string(),
+  items: z.array(conversationAnalysisItemSchema),
+});
+export type ConversationAnalysis = z.infer<typeof conversationAnalysisSchema>;
+
+export const conversationGroupSchema = z.object({
+  id: z.string(),
+  user: z.object({ content: z.string(), messageTime: z.string().optional() }),
+  assistant: z.object({ content: z.string(), name: z.string() }),
+  sourceRange: z.object({ startLine: z.number().int().positive(), endLine: z.number().int().positive() }),
+  collapsed: z.boolean().default(true),
+  contextDependency: conversationContextDependencySchema.default('unknown'),
+});
+
+export const conversationReferenceDocumentSchema = z.object({
+  kind: z.literal('conversation'),
+  name: z.string(),
+  description: z.string(),
+  source: z.object({
+    type: z.literal('conversation'),
+    uri: z.string(),
+    title: z.string().optional(),
+    format: z.enum(['chatgpt-markdown', 'deepseek-markdown']),
+    importedAt: z.string(),
+  }),
+  groups: z.array(conversationGroupSchema),
+  warnings: z.array(z.string()).default([]),
+  analysis: conversationAnalysisSchema.optional(),
+});
+export type ConversationReferenceDocument = z.infer<typeof conversationReferenceDocumentSchema>;
+
+/** 旧卡片文件保持原格式；Conversation 使用明确 kind，避免隐式猜测。 */
+export const referenceDocumentSchema = z.union([
+  conversationReferenceDocumentSchema,
+  cardReferenceDocumentSchema,
+]);
 export type ReferenceDocument = z.infer<typeof referenceDocumentSchema>;
 
-export function emptyReferenceDocument(name: string = REFERENCE_DEFAULT_NAME): ReferenceDocument {
+export function isConversationReference(document: ReferenceDocument): document is ConversationReferenceDocument {
+  return 'kind' in document && document.kind === 'conversation';
+}
+
+export function emptyReferenceDocument(name: string = REFERENCE_DEFAULT_NAME): CardReferenceDocument {
   return { name, description: '', cards: [] };
 }
 
@@ -55,6 +115,7 @@ export const referenceSummarySchema = z.object({
   path: z.string(),
   name: z.string(),
   description: z.string(),
+  kind: z.enum(['cards', 'conversation']).default('cards'),
 });
 export type ReferenceSummary = z.infer<typeof referenceSummarySchema>;
 

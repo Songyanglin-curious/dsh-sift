@@ -29,6 +29,7 @@ import {
   createReference as createReferenceRecord,
   getDocumentRelations as readDocumentRelations,
   migrateDocumentRelationTargets,
+  importConversationReference as importConversationReferenceFile,
   listReferences as listReferenceSummaries,
   loadReference as readReferenceFile,
   removeReference as deleteReferenceFile,
@@ -36,8 +37,14 @@ import {
   saveReference as writeReferenceFile,
   setDocumentRelations as writeDocumentRelations,
 } from './reference/store.js';
-import type { ReferenceDocument } from '../references.js';
+import { isConversationReference, type ReferenceDocument } from '../references.js';
+import { analyzeConversation, analyzeConversationTopic } from './conversation/analyzer.js';
 import type { ToolRuntimeContract } from './tools/contract.js';
+import {
+  ConversationAnalysisSettingsSchema,
+  SIFT_SETTINGS_NAMESPACE,
+  type ConversationAnalysisSettings,
+} from '../settings.js';
 
 export const name = 'sift';
 
@@ -63,6 +70,11 @@ interface WorkspaceRegistry {
 interface SiftContext extends Context {
   workspaceRegistry: WorkspaceRegistry;
   tools: ToolRuntimeContract;
+  settings: {
+    register<T>(namespace: string, schema: unknown, options?: { base?: T; applies?: 'live' | 'restart' }): {
+      get(): T;
+    };
+  };
 }
 
 export async function readWorkspaceProfile(workspace: WorkspaceRecord): Promise<WorkspaceProfileResult> {
@@ -108,10 +120,13 @@ export const Config = z.object({
 export type SiftConfig = z.infer<typeof Config>;
 
 export class SiftService extends TypertRemoteService {
-  static inject = ['workspaceRegistry', 'tools'];
+  static inject = ['workspaceRegistry', 'tools', 'settings', 'llm'];
   static Config = Config;
   private readonly registry: WorkspaceRegistry;
   private readonly config: SiftConfig;
+  private readonly analysisSettings: { get(): ConversationAnalysisSettings };
+  private readonly llm: Context['llm'];
+  private readonly logger: Context['logger'];
   /** 当前界面明确绑定的唯一 AI 可写 Document。 */
   private activeDocument?: { workspaceId: string; documentId: string };
   private workspacePath(id: string): string {
@@ -287,9 +302,43 @@ export class SiftService extends TypertRemoteService {
   }
 
   @Remote
+  async importConversationReference(input: { workspaceId: string; sourcePath: string }) {
+    const path = await importConversationReferenceFile(this.workspacePath(input.workspaceId), input.sourcePath);
+    return { path };
+  }
+
+  @Remote
   async saveReference(input: { workspaceId: string; path: string; reference: ReferenceDocument }) {
     await writeReferenceFile(this.workspacePath(input.workspaceId), input.path, input.reference);
     return {};
+  }
+
+  @Remote
+  async analyzeConversation(input: { workspaceId: string; path: string; anchorGroupId: string }) {
+    const root = this.workspacePath(input.workspaceId);
+    const reference = await readReferenceFile(root, input.path);
+    if (!isConversationReference(reference)) throw new Error('当前参考不是会话类型。');
+    let analysis;
+    try {
+      analysis = await analyzeConversation(reference, input.anchorGroupId, this.analysisSettings.get(), this.llm);
+    } catch (error) {
+      this.logger.error(error instanceof Error ? error.stack ?? error.message : String(error));
+      throw error;
+    }
+    const next = { ...reference, analysis };
+    await writeReferenceFile(root, input.path, next);
+    return next;
+  }
+
+  @Remote
+  async analyzeConversationTopic(input: { workspaceId: string; path: string; topic: string }) {
+    const root = this.workspacePath(input.workspaceId);
+    const reference = await readReferenceFile(root, input.path);
+    if (!isConversationReference(reference)) throw new Error('当前参考不是会话类型。');
+    const analysis = await analyzeConversationTopic(reference, input.topic, this.analysisSettings.get(), this.llm);
+    const next = { ...reference, analysis };
+    await writeReferenceFile(root, input.path, next);
+    return next;
   }
 
   @Remote
@@ -314,6 +363,13 @@ export class SiftService extends TypertRemoteService {
     super(ctx, 'sift');
     this.registry = ctx.workspaceRegistry;
     this.config = config;
+    this.llm = ctx.llm;
+    this.logger = ctx.logger;
+    this.analysisSettings = ctx.settings.register(
+      SIFT_SETTINGS_NAMESPACE,
+      ConversationAnalysisSettingsSchema,
+      { base: {}, applies: 'live' },
+    );
     // 注册即返回精确 disposer，随本 ctx 卸载自动回收，无需再包一层 effect。
     ctx.tools.register(createDocumentChangeTool(
       async () => {

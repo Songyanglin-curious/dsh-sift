@@ -11,7 +11,7 @@ const root = resolve(import.meta.dirname, '..');
 describe('Sift plugin scaffold', () => {
   it('exports the workspace-profile Host service', () => {
     expect(name).toBe('sift');
-    expect(SiftService.inject).toEqual(['workspaceRegistry', 'tools']);
+    expect(SiftService.inject).toEqual(['workspaceRegistry', 'tools', 'settings', 'llm']);
   });
 
   it('registers one disposable Client workspace profile marker', async () => {
@@ -33,7 +33,7 @@ describe('Sift plugin scaffold', () => {
       effect,
       get: () => ({ getWorkspaceProfile: vi.fn() }),
     });
-    expect(inject).toEqual(['slots', 'workspaces', 'sessions', 'remote', 'uiWorkspace', 'inputTriggers']);
+    expect(inject).toEqual(['slots', 'workspaces', 'sessions', 'remote', 'remote.session', 'uiWorkspace', 'inputTriggers', 'settingsScope']);
     expect(slots.inject).toHaveBeenCalledWith('sidebar.footer.action', expect.any(Function));
     expect(registrations.map((entry: any) => entry.options)).toEqual([
       { name: 'sidebar.footer.action', id: 'sift-workspace-profile', order: 90 },
@@ -60,8 +60,8 @@ describe('Sift plugin scaffold', () => {
     const methods = descriptors.map(descriptor => descriptor.method).sort();
     // 少一个描述符，客户端调用就会在运行期失败，所以在这里钉住。
     expect(methods).toEqual([
-      'addExistingDocument', 'addExternalFiles', 'addMaterial', 'addSource', 'browseExternal', 'browseWorkspace',
-      'createReference', 'createSourceFile', 'detachDocument', 'getDocumentRelations', 'getMaterials', 'getWorkspaceProfile',
+      'addExistingDocument', 'addExternalFiles', 'addMaterial', 'addSource', 'analyzeConversation', 'analyzeConversationTopic', 'browseExternal', 'browseWorkspace',
+      'createReference', 'createSourceFile', 'detachDocument', 'getDocumentRelations', 'getMaterials', 'getWorkspaceProfile', 'importConversationReference',
       'listDocuments', 'listMaterialFiles', 'listReferences', 'listSources', 'loadReference', 'openSourcePath',
       'pickSourceFiles', 'readClipboard', 'readDocumentContent', 'readMaterial', 'removeDocument', 'removeMaterial',
       'removeReference', 'removeSource', 'saveDocument', 'saveReference', 'setActiveDocument', 'setDocumentRelations', 'setWorkspaceProfile',

@@ -11,8 +11,16 @@ import { triggerRefSelector } from './reference/ref-selector.js';
 import { WorkspaceController } from './workspace-controller.js';
 import { installThoughtFeature, type ThoughtFeatureHost } from './thoughts/index.js';
 import { type InputTriggerServiceContract } from './dsh-adapter/input-trigger.js';
+import { unwrapRemoteResult } from './dsh-adapter/remote-result.js';
 import { mountThreeColumn, type ColumnSpec } from './dsh-adapter/layout.js';
 import { findConversationCenter } from './dsh-adapter/selectors.js';
+import { SIFT_SETTINGS_NAMESPACE } from '../settings-contract.js';
+import {
+    SiftSettingsSection,
+    type ModelCatalog,
+    type SettingsScope,
+} from './settings/section.js';
+import type { ConversationAnalysisSettings } from '../settings-contract.js';
 import {
     createLatestProfileReader,
     layoutStorageKey,
@@ -41,7 +49,10 @@ interface SiftRemote {
     listReferences(input: { workspaceId: string }): Promise<ReferenceSummary[]>;
     loadReference(input: { workspaceId: string; path: string }): Promise<ReferenceDocument>;
     createReference(input: { workspaceId: string; name?: string }): Promise<{ path: string }>;
+    importConversationReference(input: { workspaceId: string; sourcePath: string }): Promise<{ path: string }>;
     saveReference(input: { workspaceId: string; path: string; reference: ReferenceDocument }): Promise<Record<string, never>>;
+    analyzeConversation(input: { workspaceId: string; path: string; anchorGroupId: string }): Promise<ReferenceDocument>;
+    analyzeConversationTopic(input: { workspaceId: string; path: string; topic: string }): Promise<ReferenceDocument>;
     removeReference(input: { workspaceId: string; path: string }): Promise<Record<string, never>>;
     getDocumentRelations(input: { workspaceId: string; target: string }): Promise<RelationLookup>;
     setDocumentRelations(input: { workspaceId: string; target: string; references: string[] }): Promise<Record<string, never>>;
@@ -52,12 +63,17 @@ interface SiftRemote {
 }
 
 interface ClientContext {
-    slots: { inject(name: string, factory: () => unknown): unknown; register(options: { name: string; id?: string; key?: string; order?: number; inject?: (sessionId: string) => Record<string, unknown> }, component: ComponentType | unknown): () => void }
+    slots: { inject(name: string, factory: () => unknown): unknown; register(options: { name: string; id?: string; key?: string; order?: number; label?: () => string; inject?: (sessionId: string) => Record<string, unknown> }, component: ComponentType | unknown): () => void }
     workspaces?: { list: Source<WorkspaceSnapshot>; create(input: { path: string }): Promise<WorkspaceView> }
     sessions?: { list: Source<SessionSnapshot>; scope(sessionId: string): { bail(...args: unknown[]): unknown } | undefined }
     uiWorkspace?: { pickDirectory(): Promise<string | null>; openWorkspace(workspaceId: string): Promise<void> }
     inputTriggers?: InputTriggerServiceContract
-    remote: { $mount(contribution: typeof TYPERT_REMOTE): Promise<() => void | Promise<void>>; sift?: SiftRemote }
+    remote: {
+        $mount(contribution: typeof TYPERT_REMOTE): Promise<() => void | Promise<void>>;
+        sift?: SiftRemote;
+        session?: { modelCatalog(): Promise<ModelCatalog | { ok: true; value: ModelCatalog }> };
+    }
+    settingsScope?: { bind<T>(spec: { namespace: string; decode?: (section: unknown) => T | undefined }): SettingsScope<T> }
     get?(name: string): unknown
     effect?(factory: () => () => void | Promise<void>, label?: string): unknown
     startupError?: string
@@ -113,7 +129,7 @@ function WorkspaceProfileBadge({ ctx }: { ctx: ClientContext }) {
 import { installWorkspaceTypeCreator } from './workspace-creator.js';
 export { installWorkspaceTypeCreator };
 
-export const inject = ['slots', 'workspaces', 'sessions', 'remote', 'uiWorkspace', 'inputTriggers'];
+export const inject = ['slots', 'workspaces', 'sessions', 'remote', 'remote.session', 'uiWorkspace', 'inputTriggers', 'settingsScope'];
 
 export function apply(ctx: ClientContext): void {
     type MountedRemote = { [K in keyof SiftRemote]: (input: Parameters<SiftRemote[K]>[0]) => Promise<Awaited<ReturnType<SiftRemote[K]>> | { ok: true; value: Awaited<ReturnType<SiftRemote[K]>> }> };
@@ -124,7 +140,7 @@ export function apply(ctx: ClientContext): void {
         if (!remote) throw new Error('Sift Remote 已挂载，但服务不可用。');
         return remote;
     })();
-    const unwrap = <T extends object>(result: T | { ok: true; value: T }): T => 'ok' in result ? (result as { ok: true; value: T }).value : result;
+    const unwrap = unwrapRemoteResult;
     const documentsApi: DocumentsApi = {
         listDocuments: async input => unwrap(await (await mounted).listDocuments(input)),
         saveDocument: async input => unwrap(await (await mounted).saveDocument(input)),
@@ -140,7 +156,10 @@ export function apply(ctx: ClientContext): void {
         listReferences: async (input: { workspaceId: string }) => unwrap(await (await mounted).listReferences(input)),
         loadReference: async (input: { workspaceId: string; path: string }) => unwrap(await (await mounted).loadReference(input)),
         createReference: async (input: { workspaceId: string; name?: string }) => unwrap(await (await mounted).createReference(input)),
+        importConversationReference: async (input: { workspaceId: string; sourcePath: string }) => unwrap(await (await mounted).importConversationReference(input)),
         saveReference: async (input: { workspaceId: string; path: string; reference: ReferenceDocument }) => unwrap(await (await mounted).saveReference(input)),
+        analyzeConversation: async (input: { workspaceId: string; path: string; anchorGroupId: string }) => unwrap(await (await mounted).analyzeConversation(input)),
+        analyzeConversationTopic: async (input: { workspaceId: string; path: string; topic: string }) => unwrap(await (await mounted).analyzeConversationTopic(input)),
         removeReference: async (input: { workspaceId: string; path: string }) => unwrap(await (await mounted).removeReference(input)),
         getDocumentRelations: async (input: { workspaceId: string; target: string }) => unwrap(await (await mounted).getDocumentRelations(input)),
         setDocumentRelations: async (input: { workspaceId: string; target: string; references: string[] }) => unwrap(await (await mounted).setDocumentRelations(input)),
@@ -152,6 +171,21 @@ export function apply(ctx: ClientContext): void {
     const remoteContext = Object.create(ctx, {
         remote: { value: { sift: siftRemote }, writable: false, configurable: true, enumerable: true },
     }) as ClientContext;
+
+    if (ctx.settingsScope && ctx.remote.session) {
+        const scope = ctx.settingsScope.bind<ConversationAnalysisSettings>({
+            namespace: SIFT_SETTINGS_NAMESPACE,
+            decode: value => typeof value === 'object' && value !== null ? value as ConversationAnalysisSettings : undefined,
+        });
+        const loadModelCatalog = async () => unwrap(await ctx.remote.session!.modelCatalog());
+        ctx.slots.inject('settings.section', () => ctx.slots.register({
+            name: 'settings.section',
+            id: 'sift',
+            order: 35,
+            label: () => 'Sift',
+            inject: () => ({ settings: scope, loadModelCatalog }),
+        }, SiftSettingsSection));
+    }
 
     //侧边下方插槽展示当前的工作区是哪个以及类型
     ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({ name: 'sidebar.footer.action', id: 'sift-workspace-profile', order: 90 }, () => <WorkspaceProfileBadge ctx={remoteContext} />));
@@ -208,7 +242,10 @@ export function apply(ctx: ClientContext): void {
                                 listReferences: () => remoteContext.remote.sift!.listReferences({ workspaceId: workspace.workspaceId }),
                                 loadReference: path => remoteContext.remote.sift!.loadReference({ workspaceId: workspace.workspaceId, path }),
                                 createReference: name => remoteContext.remote.sift!.createReference({ workspaceId: workspace.workspaceId, name }),
+                                importConversationReference: sourcePath => remoteContext.remote.sift!.importConversationReference({ workspaceId: workspace.workspaceId, sourcePath }),
                                 saveReference: (path, reference) => remoteContext.remote.sift!.saveReference({ workspaceId: workspace.workspaceId, path, reference }).then(() => undefined),
+                                analyzeConversation: (path, anchorGroupId) => remoteContext.remote.sift!.analyzeConversation({ workspaceId: workspace.workspaceId, path, anchorGroupId }),
+                                analyzeConversationTopic: (path, topic) => remoteContext.remote.sift!.analyzeConversationTopic({ workspaceId: workspace.workspaceId, path, topic }),
                                 removeReference: path => remoteContext.remote.sift!.removeReference({ workspaceId: workspace.workspaceId, path }).then(() => undefined),
                                 pickSourceFiles: () => remoteContext.remote.sift!.pickSourceFiles({}),
                                 openSourcePath: path => remoteContext.remote.sift!.openSourcePath({ path }).then(() => undefined),
