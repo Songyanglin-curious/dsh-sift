@@ -1,28 +1,27 @@
 /* 卡片编辑弹窗样式。
    选择器重复类名以提高优先级，避免依赖样式注入顺序。
 
-   排版（字体/字号/配色/标题尺度）统一由 crepe-markdown.css 提供（对齐 DSH 对话栏 markdown），
-   这里只负责弹窗尺寸、编辑框盒子与来源表单。 */
+   卡片内容使用原生 textarea，正式长文编辑交给外部编辑器。 */
 
 .sift-card-modal.sift-card-modal {
   width: min(760px, 100%);
 }
 
 .sift-card-editor.sift-card-editor {
-  min-height: 120px;
-  max-height: min(46vh, 360px);
+  height: clamp(220px, 34vh, 420px);
+  min-height: 220px;
+  max-height: min(52vh, 520px);
   overflow: auto;
   border: 1px solid var(--dsw-alias-border-l4, #d1d5db);
   border-radius: 8px;
   background: var(--dsw-alias-bg-base, #fff);
-}
-
-/* 点击区域的最小高度必须打在编辑根上，不能用 [contenteditable] 这类宽选择器：
-   Crepe 列表项内部的 .label-wrapper 也带 contenteditable="false" 属性，
-   一旦被 min-height 命中的就会把整个列表项撑高。 */
-.sift-card-editor.sift-card-editor .milkdown .ProseMirror {
   padding: 10px 12px;
-  min-height: 110px;
+  width: 100%;
+  resize: vertical;
+  box-sizing: border-box;
+  color: var(--dsw-alias-label-primary, #111827);
+  font: inherit;
+  line-height: 1.55;
   outline: none;
 }
 

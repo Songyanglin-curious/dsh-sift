@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { createRequire } from 'node:module';
-import { describe, expect, it, vi } from 'vitest';
+import { readFile } from 'node:fs/promises';
+import { describe, expect, it } from 'vitest';
 import { previewMaterial } from '../src/client/material-preview.js';
 
 describe('real material renderers', () => {
@@ -18,13 +19,24 @@ describe('real material renderers', () => {
     expect(root.querySelector('iframe')?.getAttribute('sandbox')).not.toContain('allow-scripts');
     dispose(); root.remove();
   });
-  it('renders Markdown using the same Crepe surface as the output editor, read-only', async () => {
-    vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
+  it('renders Markdown using DSH MarkdownText, read-only', async () => {
     const root = document.createElement('div'); document.body.append(root);
     const dispose = await previewMaterial(root, { id: 'md', kind: 'file', name: 'note.md', target: 'note.md' }, new TextEncoder().encode('# 素材标题\n\n正文内容'), new AbortController().signal);
+    await new Promise(resolve => setTimeout(resolve, 0));
     expect(root.querySelector('h1')?.textContent).toBe('素材标题');
-    expect(root.querySelector('.ProseMirror')?.getAttribute('contenteditable')).toBe('false');
-    dispose(); root.remove(); vi.unstubAllGlobals();
+    expect(root.querySelector('[data-dsh-markdown-text]')).not.toBeNull();
+    expect(root.querySelector('[contenteditable]')).toBeNull();
+    dispose(); root.remove();
+  });
+  it('renders the project README with the complete DSH MarkdownText contract', async () => {
+    const root = document.createElement('div'); document.body.append(root);
+    const readme = await readFile('README.md');
+    const dispose = await previewMaterial(root, { id: 'readme', kind: 'file', name: 'README.md', target: 'README.md' }, readme, new AbortController().signal);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(root.querySelector('[data-dsh-markdown-text]')).not.toBeNull();
+    expect(root.querySelector('[data-code-copy-label]')?.getAttribute('data-code-copy-label')).toBe('复制代码');
+    expect(root.querySelector('h1')?.textContent).toBe('Sift');
+    dispose(); root.remove();
   });
   it('renders URLs in a sandbox with an original-page link and explains unsupported DOC', async () => {
     const root = document.createElement('div');

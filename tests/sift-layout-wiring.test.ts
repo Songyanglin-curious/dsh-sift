@@ -2,17 +2,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProfileResult } from '../src/client/dsh-adapter/workspace-entry.js';
 
-const mocks = vi.hoisted(() => ({ instances: [] as any[] }));
-vi.mock('@milkdown/crepe', () => ({ Crepe: class {
-  static Feature = { Latex: 'latex', Placeholder: 'placeholder' };
-  destroy = vi.fn(async () => {});
-  value: string;
-  constructor(public options: any) { this.value = options.defaultValue; mocks.instances.push(this); }
-  on(fn: any) { fn({ markdownUpdated: () => {} }); }
-  async create() {}
-  getMarkdown() { return this.value; }
-} }));
-
 const { apply } = await import('../src/client/index.js');
 
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
@@ -45,6 +34,7 @@ function context(profile: ProfileResult, workspaceId: string, sessionId: string)
     listDocuments: vi.fn(async () => ({ schemaVersion: 1 as const, documents: [] })),
     saveDocument: vi.fn(),
     readDocumentContent: vi.fn(),
+    setActiveDocument: vi.fn(async () => ({})),
     addExistingDocument: vi.fn(),
     detachDocument: vi.fn(),
     removeDocument: vi.fn(),
@@ -91,7 +81,6 @@ beforeEach(() => {
     unobserve() {}
     disconnect() {}
   };
-  mocks.instances.length = 0;
   localStorage.clear();
   document.head.querySelectorAll('style[data-sift-layout]').forEach(node => node.remove());
 });
@@ -153,7 +142,7 @@ describe('Sift 界面接线', () => {
     await tick(); await tick();
 
     expect(ctx.service.listDocuments).toHaveBeenCalledWith({ workspaceId: ids.workspaceId });
-    expect(mocks.instances).toHaveLength(0);
+    expect(document.querySelector('[data-dsh-markdown-text]')).toBeNull();
     expect(document.querySelector('[data-sift-output-empty]')?.textContent).toContain('暂无打开的产出');
     // 没有登记表内容时不应该写任何东西。
     expect(ctx.service.saveDocument).not.toHaveBeenCalled();

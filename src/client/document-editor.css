@@ -1,7 +1,4 @@
-@import '@milkdown/crepe/theme/common/style.css';
-@import '@milkdown/crepe/theme/classic.css';
-
-/* Document 栏：上面是 Output Tabs，下面是正文编辑器。
+/* Document 栏：上面是 Output Tabs，下面是 DSH 原生 Markdown 阅读视图。
    与布局样式的顺序约定：layout.css 先注入，本文件后注入，因此同优先级的覆盖成立。 */
 
 [data-sift-column='document'] {
@@ -152,9 +149,7 @@
   font-size: var(--dsh-content-font-size, 14px);
 }
 
-/* 排版（字体/字号/配色/标题尺度）统一由 crepe-markdown.css 提供，
-   这里只保留本栏的编辑器布局。 */
-[data-sift-editor] .milkdown .ProseMirror {
+[data-sift-editor] > * {
   padding: 24px 32px 80px;
-  min-height: 300px;
+  box-sizing: border-box;
 }

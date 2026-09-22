@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdir, readFile } from 'node:fs/promises';
+import { mkdir, readFile, rm } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -54,6 +54,8 @@ export async function buildClient(outdir = resolve(root, 'dist')) {
 }
 
 export async function buildArtifacts(outdir = resolve(root, 'dist')) {
+  // 构建目录只包含本次源码产物，避免已删除模块的声明文件残留进发布包。
+  await rm(outdir, { recursive: true, force: true });
   await Promise.all([buildHost(outdir), buildClient(outdir)]);
 }
 

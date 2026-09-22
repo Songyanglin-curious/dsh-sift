@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { readMaterials, listMaterialFiles, mutateMaterials, readMaterial } from './materials.js';
-import { createDocumentChangeStore, createDocumentChangeTool } from './document/change-tool.js';
+import { createDocumentChangeTool } from './document/change-tool.js';
 import {
   readDocumentIndex,
   readDocumentText,
@@ -112,8 +112,8 @@ export class SiftService extends TypertRemoteService {
   static Config = Config;
   private readonly registry: WorkspaceRegistry;
   private readonly config: SiftConfig;
-  /** Phase 8 之前，待确认的 Document 修改提案先只存在内存里。 */
-  private readonly documentChanges = createDocumentChangeStore();
+  /** 当前界面明确绑定的唯一 AI 可写 Document。 */
+  private activeDocument?: { workspaceId: string; documentId: string };
   private workspacePath(id: string): string {
     const workspace = this.registry.get(id);
     if (!workspace) throw new Error('工作区不存在。');
@@ -157,6 +157,19 @@ export class SiftService extends TypertRemoteService {
     const document = index.documents.find(item => item.id === input.documentId);
     if (!document?.path) throw new Error('Document 不存在或尚未保存。');
     return { content: await readDocumentText(root, document.path), path: document.path };
+  }
+
+  @Remote
+  async setActiveDocument(input: { workspaceId: string; documentId?: string }) {
+    if (input.documentId === undefined) {
+      if (this.activeDocument?.workspaceId === input.workspaceId) this.activeDocument = undefined;
+      return {};
+    }
+    const root = this.workspacePath(input.workspaceId);
+    const index = await readDocumentIndex(root);
+    if (!index.documents.some(item => item.id === input.documentId && item.path)) throw new Error('当前 Document 不存在或尚未保存。');
+    this.activeDocument = { workspaceId: input.workspaceId, documentId: input.documentId };
+    return {};
   }
 
   @Remote
@@ -302,7 +315,24 @@ export class SiftService extends TypertRemoteService {
     this.registry = ctx.workspaceRegistry;
     this.config = config;
     // 注册即返回精确 disposer，随本 ctx 卸载自动回收，无需再包一层 effect。
-    ctx.tools.register(createDocumentChangeTool(this.documentChanges));
+    ctx.tools.register(createDocumentChangeTool(
+      async () => {
+        const active = this.activeDocument;
+        if (!active) throw new Error('Sift 当前没有打开可修改的 Document。');
+        const root = this.workspacePath(active.workspaceId);
+        const index = await readDocumentIndex(root);
+        const document = index.documents.find(item => item.id === active.documentId);
+        if (!document?.path) throw new Error('当前 Document 不存在或尚未保存。');
+        return { ...active, path: document.path };
+      },
+      async (target, content) => {
+        const root = this.workspacePath(target.workspaceId);
+        const index = await readDocumentIndex(root);
+        const document = index.documents.find(item => item.id === target.documentId);
+        if (!document?.path || document.path !== target.path) throw new Error('当前 Document 已发生变化，请重新打开后再试。');
+        await saveDocumentFile(root, { id: document.id, ...(document.title === undefined ? {} : { title: document.title }), content });
+      },
+    ));
     ctx.logger.info('Sift 插件已加载。');
     ctx.effect(() => () => ctx.logger.info('Sift 插件已卸载。'));
   }

@@ -1,15 +1,14 @@
 /**
  * 编辑卡片内容与来源信息的弹窗。
  *
- * - 编辑器复用 createMarkdownSurface（Milkdown Crepe）；
+ * - 卡片正文使用原生 textarea，避免为短文本维护完整 Markdown 编辑器；
  * - 弹窗外壳、按钮、输入框全部使用 DSH primitives（Modal / Button / Input），
  *   不自己造 UI；仅用一张很小的样式表覆盖 Modal 默认宽度（默认仅 380px）并约束编辑器高度。
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Button, Input, Modal, Pill } from '@deepseek-ai/dsh-client-ui-primitives';
-import { createMarkdownSurface } from '../markdown-surface.js';
 import { injectStyle, SIFT_PLUGIN_ID } from './inject-style.js';
 import cardEditCss from './card-edit.css?inline';
 import type { ReferenceCardSource } from '../../references.js';
@@ -49,8 +48,7 @@ function CardEditModal() {
   const [isOpen, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
-  const editorRef = useRef<Awaited<ReturnType<typeof createMarkdownSurface>> | null>(null);
-  const editorRoot = useRef<HTMLDivElement | null>(null);
+  const [content, setContent] = useState('');
   const [sourceKind, setSourceKind] = useState<SourceKind>('none');
   const [sourceUri, setSourceUri] = useState('');
 
@@ -60,35 +58,12 @@ function CardEditModal() {
       const src = currentInitial.source;
       setSourceKind(src && (src.type === 'web' || src.type === 'file') ? src.type : 'none');
       setSourceUri(src?.uri ?? '');
+      setContent(currentInitial.content);
       setError(undefined);
       setOpen(true);
     };
     return () => { showEditor = undefined; };
   }, []);
-
-  // 弹窗打开时才挂载 Milkdown（Modal 关闭时不渲染 children）
-  useEffect(() => {
-    if (!isOpen) return;
-    const root = editorRoot.current;
-    if (!root || !currentInitial) return;
-
-    let cancelled = false;
-    void (async () => {
-      try {
-        const editor = await createMarkdownSurface(root, currentInitial!.content);
-        if (cancelled) { await editor.destroy(); return; }
-        editorRef.current = editor;
-      } catch (err) {
-        if (!cancelled) setError(`编辑器加载失败：${err instanceof Error ? err.message : String(err)}`);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      editorRef.current?.destroy().catch(() => {});
-      editorRef.current = null;
-    };
-  }, [isOpen]);
 
   const close = () => { setOpen(false); setBusy(false); setError(undefined); };
 
@@ -107,9 +82,6 @@ function CardEditModal() {
   };
 
   const handleSave = async () => {
-    const editor = editorRef.current;
-    if (!editor) { setError('编辑器尚未加载完成。'); return; }
-    const content = editor.getMarkdown();
     if (content.trim() === '') { setError('内容不能为空。'); return; }
 
     let source: ReferenceCardSource | undefined;
@@ -151,7 +123,13 @@ function CardEditModal() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div>
           <div className="sift-card-field-label">内容（Markdown）</div>
-          <div ref={editorRoot} className="sift-card-editor" />
+          <textarea
+            className="sift-card-editor"
+            aria-label="卡片 Markdown 内容"
+            value={content}
+            disabled={busy}
+            onChange={event => setContent(event.target.value)}
+          />
         </div>
 
         <div>

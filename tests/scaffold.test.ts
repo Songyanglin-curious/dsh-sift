@@ -64,7 +64,7 @@ describe('Sift plugin scaffold', () => {
       'createReference', 'createSourceFile', 'detachDocument', 'getDocumentRelations', 'getMaterials', 'getWorkspaceProfile',
       'listDocuments', 'listMaterialFiles', 'listReferences', 'listSources', 'loadReference', 'openSourcePath',
       'pickSourceFiles', 'readClipboard', 'readDocumentContent', 'readMaterial', 'removeDocument', 'removeMaterial',
-      'removeReference', 'removeSource', 'saveDocument', 'saveReference', 'setDocumentRelations', 'setWorkspaceProfile',
+      'removeReference', 'removeSource', 'saveDocument', 'saveReference', 'setActiveDocument', 'setDocumentRelations', 'setWorkspaceProfile',
     ]);
     for (const descriptor of descriptors) {
       expect(descriptor.service).toBe('sift');

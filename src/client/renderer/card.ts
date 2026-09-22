@@ -8,7 +8,7 @@
  *   [data-sift-card]
  *     [data-sift-card-handle]   ← 左上 ⠿ 拖拽把手（唯一拖拽热区）
  *     [data-sift-card-remove]   ← 右上 × 删除
- *     [data-sift-card-body]     ← Markdown 渲染区（MarkdownView / md-block）
+ *     [data-sift-card-body]     ← DSH 原生 Markdown 渲染区
  *     [data-sift-card-source]   ← 右下弱图标，仅有来源时渲染
  */
 

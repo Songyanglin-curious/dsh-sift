@@ -66,15 +66,10 @@
     "@deepseek-ai/dsh-typert-protocol": "0.1.5-rc.2"
   },
   "dependencies": {
-    "@codemirror/lang-markdown": "6.5.0",
-    "@codemirror/state": "6.7.4",
-    "@codemirror/view": "6.43.11",
-    "@milkdown/crepe": "^7.22.1",
     "@mozilla/readability": "0.6.0",
     "docx-preview": "^0.4.0",
     "dompurify": "3.4.15",
     "koffi": "^3.3.0",
-    "md-block": "^0.0.1",
     "pdfjs-dist": "^6.3.289",
     "sortablejs": "^1.15.7",
     "tom-select": "^2.6.2",

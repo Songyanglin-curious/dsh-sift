@@ -1,12 +1,11 @@
 import { materialFormat, normalizeMaterialUrl, type Material } from '../materials.js';
-import { createMarkdownSurface } from './markdown-surface.js';
+import { mountMarkdownView } from './markdown-view.js';
 
 export async function previewMaterial(root: HTMLElement, material: Material, data: Uint8Array, signal: AbortSignal): Promise<() => void> {
   const format = materialFormat(material);
   if (format === 'md') {
-    root.dataset.siftEditor = '';
-    const editor = await createMarkdownSurface(root, new TextDecoder().decode(data), { readonly: true });
-    return () => { void editor.destroy().catch(error => console.error('Markdown preview cleanup failed', error)); };
+    root.dataset.siftMarkdownView = '';
+    return mountMarkdownView(root, new TextDecoder().decode(data));
   }
   if (format === 'pdf') return previewPdf(root, data, signal);
   if (format === 'docx') {

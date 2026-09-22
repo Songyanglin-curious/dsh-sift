@@ -41,7 +41,7 @@ class ThoughtStore {
         source: SIFT_THOUGHT_SOURCE,
         ref,
         label: thoughtLabel(thought.thought),
-        clipboardText: `@想法:${id.slice(0, 8)}`,
+        clipboardText: `@批注:${id.slice(0, 8)}`,
       },
       span: { start: offset, end: offset, draftRev: binding.input.draftRev },
     }) === true;
@@ -91,7 +91,7 @@ function ThoughtDock({ thoughtSessionId, input }: ThoughtDockProps) {
   const active = store.active(thoughtSessionId, input);
   if (active.length === 0) return null;
   return <div data-sift-thought-dock="">
-    <div className="sift-thought-heading">本轮想法 · {active.length}</div>
+    <div className="sift-thought-heading">本轮批注 · {active.length}</div>
     {active.map(({ thought, occurrence }) => {
       const ref = occurrence.ref;
       const isEditing = editing === ref;
@@ -99,8 +99,8 @@ function ThoughtDock({ thoughtSessionId, input }: ThoughtDockProps) {
         <span className="sift-thought-area">{thought.area === 'reference' ? '参考' : '产出'} · {thought.sourceName}</span>
         <span className="sift-thought-selection">“{thought.selectedText}”</span>
         <span className="sift-thought-text">{thought.thought}</span>
-        <button type="button" aria-label="编辑想法" title="编辑想法" onClick={() => setEditing(isEditing ? undefined : ref)}>✎</button>
-        <button type="button" aria-label="移除想法" title="移除想法" onClick={() => store.remove(thoughtSessionId, occurrence)}>×</button>
+        <button type="button" aria-label="编辑批注" title="编辑批注" onClick={() => setEditing(isEditing ? undefined : ref)}>✎</button>
+        <button type="button" aria-label="移除批注" title="移除批注" onClick={() => store.remove(thoughtSessionId, occurrence)}>×</button>
         {isEditing && <ThoughtEdit thought={thought} onCancel={() => setEditing(undefined)} onSave={value => { store.edit(ref, value); setEditing(undefined); }} />}
       </div>;
     })}
@@ -110,9 +110,9 @@ function ThoughtDock({ thoughtSessionId, input }: ThoughtDockProps) {
 function ThoughtEdit({ thought, onCancel, onSave }: { thought: Thought; onCancel(): void; onSave(value: string): void }) {
   const [value, setValue] = useState(thought.thought);
   return <div className="sift-thought-edit">
-    <textarea aria-label="想法内容" value={value} onChange={event => setValue(event.target.value)} onKeyDown={event => {
+    <textarea aria-label="批注内容" value={value} onChange={event => setValue(event.target.value)} onKeyDown={event => {
       if (event.key === 'Escape') onCancel();
-      if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) onSave(value);
+      if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); onSave(value); }
     }} />
     <div><button type="button" onClick={onCancel}>取消</button><button type="button" onClick={() => onSave(value)} disabled={value.trim() === ''}>保存</button></div>
   </div>;
@@ -138,10 +138,10 @@ export function installThoughtFeature(ctx: ThoughtFeatureHost): ThoughtFeature {
     trigger: '@', name: SIFT_THOUGHT_SOURCE, order: 5, showGroupTitle: false,
     candidates: async () => [], onPick: () => undefined,
     codec: {
-      clipboardText: ref => `@想法:${ref.split(':').at(-1)?.slice(0, 8) ?? ''}`,
+      clipboardText: ref => `@批注:${ref.split(':').at(-1)?.slice(0, 8) ?? ''}`,
       serialize: async ref => {
         const thought = store.thought(ref);
-        if (!thought) throw new Error('本轮想法已失效，请移除后重新添加。');
+        if (!thought) throw new Error('本轮批注已失效，请移除后重新添加。');
         return formatThought(thought);
       },
     },
@@ -153,7 +153,7 @@ export function installThoughtFeature(ctx: ThoughtFeatureHost): ThoughtFeature {
       name: 'conversation.input.dock', id: 'sift-thoughts', order: 10,
       inject: sessionId => {
         const actx = ctx.sessions.scope(sessionId);
-        if (!actx) throw new Error(`Sift 想法：找不到会话 ${sessionId}`);
+        if (!actx) throw new Error(`Sift 批注：找不到会话 ${sessionId}`);
         store.bind(sessionId, actx);
         return { thoughtSessionId: sessionId };
       },
@@ -175,7 +175,7 @@ let activePopover: HTMLElement | undefined;
 function openThoughtComposer(anchor: DOMRect, bounds: DOMRect, selection: ThoughtSelection, add: (text: string) => boolean): void {
   activePopover?.remove();
   const quick = document.createElement('button');
-  quick.type = 'button'; quick.dataset.siftThoughtQuick = ''; quick.textContent = '＋ 想法';
+  quick.type = 'button'; quick.dataset.siftThoughtQuick = ''; quick.textContent = '＋ 批注';
   document.body.appendChild(quick);
   positionQuick(quick, anchor, bounds);
   activePopover = quick;
@@ -185,14 +185,14 @@ function openThoughtComposer(anchor: DOMRect, bounds: DOMRect, selection: Though
     event.stopPropagation();
     const form = document.createElement('form'); form.dataset.siftThoughtEditor = '';
     const quote = document.createElement('small'); quote.textContent = `“${selection.selectedText.replace(/\s+/g, ' ')}”`;
-    const input = document.createElement('textarea'); input.placeholder = '写下你的想法…'; input.setAttribute('aria-label', '想法内容');
+    const input = document.createElement('textarea'); input.placeholder = '写下你的批注…'; input.setAttribute('aria-label', '批注内容');
     const footer = document.createElement('footer');
     const cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = '取消';
     const submit = document.createElement('button'); submit.type = 'submit'; submit.textContent = '加入本轮'; submit.disabled = true;
     input.addEventListener('input', () => { submit.disabled = input.value.trim() === ''; });
     input.addEventListener('keydown', key => {
       if (key.key === 'Escape') { key.preventDefault(); form.remove(); activePopover = undefined; }
-      if (key.key === 'Enter' && (key.ctrlKey || key.metaKey)) { key.preventDefault(); form.requestSubmit(); }
+      if (key.key === 'Enter' && !key.shiftKey && !key.isComposing) { key.preventDefault(); form.requestSubmit(); }
     });
     cancel.addEventListener('click', () => { form.remove(); activePopover = undefined; });
     form.addEventListener('submit', submitEvent => {

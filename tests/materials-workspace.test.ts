@@ -34,7 +34,7 @@ describe('materials workspace integration', () => {
 
   beforeAll(async () => {
     vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
-    // ProseMirror's virtual cursor asks the selection Range for client rects, which jsdom does not implement.
+    // 部分预览组件会读取选区 Range，jsdom 默认未实现这些几何方法。
     const emptyRects = () => Object.assign([], { item: () => null }) as unknown as DOMRectList;
     Range.prototype.getClientRects = emptyRects;
     Range.prototype.getBoundingClientRect = () => ({ x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, toJSON: () => ({}) }) as DOMRect;
@@ -114,11 +114,12 @@ describe('materials workspace integration', () => {
     expect((await readMaterials(workspace)).items.at(-1)?.target).toBe('https://example.com/');
   }, 30000);
 
-  it('renders Markdown read-only through the same Crepe surface as the output column', async () => {
+  it('renders Markdown read-only through DSH MarkdownText', async () => {
     await select('01-素材说明.md');
     const heading = await until(() => root.querySelector<HTMLElement>('[data-sift-material-preview] h1'), 'Markdown 标题');
     expect(heading.textContent).toBe('素材预览验收');
-    expect(root.querySelector('[data-sift-material-preview] .ProseMirror')?.getAttribute('contenteditable')).toBe('false');
+    expect(root.querySelector('[data-sift-material-preview] [data-dsh-markdown-text]')).not.toBeNull();
+    expect(root.querySelector('[data-sift-material-preview] [contenteditable]')).toBeNull();
   }, 30000);
 
   it('renders the DOCX into a script-disabled frame and refuses to parse legacy DOC', async () => {

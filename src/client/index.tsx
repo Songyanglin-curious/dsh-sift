@@ -32,6 +32,7 @@ interface SiftRemote {
     listDocuments: DocumentsApi['listDocuments'];
     saveDocument: DocumentsApi['saveDocument'];
     readDocumentContent: DocumentsApi['readDocumentContent'];
+    setActiveDocument(input: { workspaceId: string; documentId?: string }): Promise<Record<string, never>>;
     addExistingDocument: DocumentsApi['addExistingDocument'];
     detachDocument: DocumentsApi['detachDocument'];
     removeDocument: DocumentsApi['removeDocument'];
@@ -145,6 +146,7 @@ export function apply(ctx: ClientContext): void {
         setDocumentRelations: async (input: { workspaceId: string; target: string; references: string[] }) => unwrap(await (await mounted).setDocumentRelations(input)),
         pickSourceFiles: async () => unwrap(await (await mounted).pickSourceFiles({})),
         openSourcePath: async (input: { path: string }) => unwrap(await (await mounted).openSourcePath(input)),
+        setActiveDocument: async (input: { workspaceId: string; documentId?: string }) => unwrap(await (await mounted).setActiveDocument(input)),
         ...documentsApi,
     };
     const remoteContext = Object.create(ctx, {
@@ -230,6 +232,8 @@ export function apply(ctx: ClientContext): void {
                     pickOutputFiles: () => remoteContext.remote.sift!.pickSourceFiles({}),
                     workspace: workspaceController,
                     thoughts,
+                    openDocumentPath: path => remoteContext.remote.sift!.openSourcePath({ path }).then(() => undefined),
+                    setActiveDocument: documentId => remoteContext.remote.sift!.setActiveDocument({ workspaceId: workspace.workspaceId, ...(documentId === undefined ? {} : { documentId }) }).then(() => undefined),
                     editRelations: () => {
                         return remoteContext.remote.sift!.listReferences({ workspaceId: workspace.workspaceId }).then(all => triggerRefSelector({
                             all,

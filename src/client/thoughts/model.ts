@@ -20,19 +20,20 @@ export function formatThought(thought: Thought): string {
   const area = thought.area === 'reference' ? '参考' : '产出';
   return [
     '',
-    `【本轮想法｜${area}：${thought.sourceName}】`,
+    `【本轮批注｜${area}：${thought.sourceName}】`,
     '选中信息：',
     thought.selectedText,
     '',
-    '我的想法：',
+    '我的批注：',
     thought.thought,
+    '---',
     '',
   ].join('\n');
 }
 
 export function thoughtLabel(thought: string): string {
   const compact = thought.replace(/\s+/g, ' ').trim();
-  return `想法：${compact.length > 22 ? `${compact.slice(0, 22)}…` : compact}`;
+  return `批注：${compact.length > 22 ? `${compact.slice(0, 22)}…` : compact}`;
 }
 
 export interface ThoughtOccurrencePosition {

@@ -264,8 +264,8 @@
 [data-sift-material-target] button { flex: none; padding: 2px 6px; border-radius: 4px; }
 [data-sift-material-target] button:hover { background: var(--dsw-alias-bg-base, #e5e7eb); }
 
-/* Read-only Markdown preview reuses the Crepe surface from the output column. */
-[data-sift-column=materials] [data-sift-editor] .milkdown .ProseMirror { padding: 18px 18px 64px; font-size: 14px; }
-[data-sift-column=materials] [data-sift-editor] .ProseMirror h1 { font-size: 22px; line-height: 1.35; }
-[data-sift-column=materials] [data-sift-editor] .ProseMirror h2 { font-size: 18px; line-height: 1.4; }
-[data-sift-column=materials] [data-sift-editor] .ProseMirror h3 { font-size: 16px; line-height: 1.4; }
+/* Markdown 素材预览复用 DSH 原生 MarkdownText。 */
+[data-sift-column=materials] [data-sift-markdown-view] { padding: 18px 18px 64px; font-size: 14px; }
+[data-sift-column=materials] [data-sift-markdown-view] h1 { font-size: 22px; line-height: 1.35; }
+[data-sift-column=materials] [data-sift-markdown-view] h2 { font-size: 18px; line-height: 1.4; }
+[data-sift-column=materials] [data-sift-markdown-view] h3 { font-size: 16px; line-height: 1.4; }

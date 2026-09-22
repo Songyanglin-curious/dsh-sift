@@ -1,126 +1,60 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-  DOCUMENT_CHANGE_TOOL_NAME,
-  createDocumentChangeStore,
-  createDocumentChangeTool,
-} from '../src/host/document/change-tool.js';
-import type { JsonSchemaNode, ToolDefinition } from '../src/host/tools/contract.js';
+import { DOCUMENT_CHANGE_TOOL_NAME, createDocumentChangeTool, type CurrentDocumentTarget } from '../src/host/document/change-tool.js';
+import type { JsonSchemaNode } from '../src/host/tools/contract.js';
 
-const SUPPORTED_KEYWORDS = new Set(['type', 'oneOf', 'properties', 'required', 'additionalProperties', 'items', 'enum', 'const', 'description', 'title', 'default', 'examples']);
-
-/**
- * 镜像 dsh-tools `assertSupportedJsonSchema` 的 enforced subset：
- * 不支持的或不支持位置的关键字会被拒绝，而不是静默接受。
- */
-function assertSupportedSchema(schema: JsonSchemaNode, path = 'schema'): void {
-  for (const key of Object.keys(schema)) expect(SUPPORTED_KEYWORDS, `${path}.${key} 不在受支持子集里`).toContain(key);
+const SUPPORTED = new Set(['type', 'oneOf', 'properties', 'required', 'additionalProperties', 'items', 'enum', 'const', 'description', 'title']);
+function assertSchema(schema: JsonSchemaNode, path = 'schema'): void {
+  for (const key of Object.keys(schema)) expect(SUPPORTED, `${path}.${key}`).toContain(key);
   if (schema.type === 'object') {
-    expect(typeof schema.additionalProperties, `${path}.additionalProperties 必须显式声明`).toBe('boolean');
-    for (const [key, child] of Object.entries(schema.properties ?? {})) assertSupportedSchema(child, `${path}.${key}`);
+    expect(typeof schema.additionalProperties).toBe('boolean');
+    for (const [key, child] of Object.entries(schema.properties ?? {})) assertSchema(child, `${path}.${key}`);
   }
-  if (schema.items) assertSupportedSchema(schema.items, `${path}.items`);
 }
 
-function tool(): ToolDefinition {
-  return createDocumentChangeTool(createDocumentChangeStore(), () => '2026-01-01T00:00:00.000Z', () => 'proposal-1');
-}
-
+const target: CurrentDocumentTarget = { workspaceId: 'workspace-1', documentId: 'doc-1', path: 'notes/a.md' };
 const exec = { signal: new AbortController().signal };
+const setup = () => {
+  const current = vi.fn(async () => target);
+  const write = vi.fn(async () => {});
+  return { current, write, definition: createDocumentChangeTool(current, write) };
+};
 
-describe('sift_propose_document_change 定义', () => {
-  it('是注册表能接受的结构', () => {
-    const definition = tool();
+describe('sift_update_current_document 定义', () => {
+  it('只接受完整正文，不允许模型指定路径或 Document id', () => {
+    const { definition } = setup();
     expect(definition.name).toBe(DOCUMENT_CHANGE_TOOL_NAME);
-    expect(definition.name.startsWith('sift_')).toBe(true);
-    expect(typeof definition.execute).toBe('function');
-    expect(typeof definition.output.render).toBe('function');
-    assertSupportedSchema(definition.output.schema);
-  });
-
-  it('parameters 是 raw JSON Schema，用 required 字符串数组', () => {
-    const { parameters } = tool();
-    expect(parameters).toMatchObject({ type: 'object', required: ['documentId', 'content'] });
-    expect(Object.keys(parameters.properties as Record<string, unknown>)).toEqual(['documentId', 'content', 'reason']);
-  });
-
-  it('output.schema 也用 required 字符串数组，而不是属性级 required', () => {
-    const { schema } = tool().output;
-    expect(schema.required).toEqual(['proposalId', 'documentId', 'status']);
-    for (const property of Object.values(schema.properties ?? {})) {
-      expect(property).not.toHaveProperty('required');
-    }
-  });
-
-  it('描述里明确禁止直接写文件覆盖 Document', () => {
-    expect(tool().description).toContain('完整文档正文');
-    expect(tool().description).toContain('唯一方式');
+    expect(definition.parameters).toMatchObject({ type: 'object', required: ['content'] });
+    expect(Object.keys(definition.parameters.properties as object)).toEqual(['content', 'reason']);
+    expect(definition.description).toContain('当前打开');
+    expect(definition.description).toContain('不能指定路径');
+    assertSchema(definition.output.schema);
   });
 });
 
-describe('sift_propose_document_change 执行', () => {
-  it('记录提案并返回规范值', async () => {
-    const store = createDocumentChangeStore();
-    const definition = createDocumentChangeTool(store, () => '2026-01-01T00:00:00.000Z', () => 'proposal-1');
-    const value = await definition.execute({ documentId: 'doc-1', content: '# 新正文', reason: '补充一节' }, exec);
-    expect(value).toEqual({ proposalId: 'proposal-1', documentId: 'doc-1', status: 'pending' });
-    expect(store.peek('doc-1')).toEqual({
-      proposalId: 'proposal-1', documentId: 'doc-1', content: '# 新正文', reason: '补充一节', createdAt: '2026-01-01T00:00:00.000Z',
-    });
+describe('sift_update_current_document 执行', () => {
+  it('解析当前绑定目标并直接写入完整正文', async () => {
+    const { definition, current, write } = setup();
+    const value = await definition.execute({ content: '# 新正文', reason: '整理' }, exec);
+    expect(current).toHaveBeenCalledTimes(1);
+    expect(write).toHaveBeenCalledWith(target, '# 新正文');
+    expect(value).toEqual({ documentId: 'doc-1', path: 'notes/a.md', status: 'updated' });
+    expect(definition.output.render({}, value as never)[0]?.text).toContain('已更新');
   });
 
-  it('render 告诉模型等待用户接受', async () => {
-    const definition = tool();
-    const value = await definition.execute({ documentId: 'doc-1', content: '# 新正文' }, exec);
-    const blocks = definition.output.render({ documentId: 'doc-1', content: '# 新正文' }, value as never);
-    expect(blocks).toHaveLength(1);
-    expect(blocks[0]).toMatchObject({ type: 'text' });
-    expect(blocks[0]!.text).toContain('接受或拒绝');
+  it('没有当前 Document 时不写入', async () => {
+    const write = vi.fn(async () => {});
+    const definition = createDocumentChangeTool(async () => { throw new Error('没有当前 Document'); }, write);
+    await expect(definition.execute({ content: 'x' }, exec)).rejects.toThrow('没有当前 Document');
+    expect(write).not.toHaveBeenCalled();
   });
 
-  it('拒绝非法参数', async () => {
-    const definition = tool();
+  it('拒绝非法参数和已取消调用', async () => {
+    const { definition, write } = setup();
     await expect(definition.execute(null, exec)).rejects.toThrow('参数必须是对象');
-    await expect(definition.execute({ content: 'x' }, exec)).rejects.toThrow('documentId 必须是非空字符串');
-    await expect(definition.execute({ documentId: 'doc-1', content: 42 }, exec)).rejects.toThrow('content 必须是字符串');
-    await expect(definition.execute({ documentId: 'doc-1', content: 'x', reason: 1 }, exec)).rejects.toThrow('reason 必须是字符串');
-  });
-
-  it('已取消的调用立即失败且不写入提案', async () => {
-    const store = createDocumentChangeStore();
-    const definition = createDocumentChangeTool(store);
-    const controller = new AbortController();
-    controller.abort();
-    await expect(definition.execute({ documentId: 'doc-1', content: 'x' }, { signal: controller.signal })).rejects.toThrow();
-    expect(store.list()).toHaveLength(0);
-  });
-});
-
-describe('待确认提案存储', () => {
-  it('每个 Document 只保留最新一条，take 会消费', () => {
-    let count = 0;
-    const store = createDocumentChangeStore();
-    const definition = createDocumentChangeTool(store, () => '2026-01-01T00:00:00.000Z', () => `proposal-${++count}`);
-    return Promise.all([
-      definition.execute({ documentId: 'doc-1', content: '第一版' }, exec),
-      definition.execute({ documentId: 'doc-1', content: '第二版' }, exec),
-      definition.execute({ documentId: 'doc-2', content: '另一篇' }, exec),
-    ]).then(() => {
-      expect(store.peek('doc-1')?.content).toBe('第二版');
-      expect(store.list()).toHaveLength(2);
-      expect(store.take('doc-1')?.proposalId).toBe('proposal-2');
-      expect(store.take('doc-1')).toBeUndefined();
-      expect(store.peek('doc-2')?.content).toBe('另一篇');
-    });
-  });
-});
-
-describe('宿主注册接线', () => {
-  it('通过 ctx.tools.register 注册，并使用返回的 disposer', () => {
-    const dispose = vi.fn();
-    const tools = { register: vi.fn(() => dispose) };
-    const registered = tools.register(createDocumentChangeTool(createDocumentChangeStore()));
-    expect(tools.register).toHaveBeenCalledWith(expect.objectContaining({ name: DOCUMENT_CHANGE_TOOL_NAME }));
-    registered();
-    expect(dispose).toHaveBeenCalledTimes(1);
+    await expect(definition.execute({}, exec)).rejects.toThrow('content 必须是字符串');
+    await expect(definition.execute({ content: 'x', reason: 1 }, exec)).rejects.toThrow('reason 必须是字符串');
+    const controller = new AbortController(); controller.abort();
+    await expect(definition.execute({ content: 'x' }, { signal: controller.signal })).rejects.toThrow();
+    expect(write).not.toHaveBeenCalled();
   });
 });

@@ -48,8 +48,22 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     disabled?: boolean;
   }
 
+  interface MarkdownTextProps {
+    text: string;
+    streaming?: boolean;
+    className?: string;
+    labels: {
+      code: {
+        copyLabel: string;
+        copiedLabel: string;
+      };
+      footnotes: string;
+    };
+  }
+
   export const Modal: ComponentType<ModalProps>;
   export const Button: ComponentType<ButtonProps>;
   export const Input: ComponentType<InputProps>;
   export const Pill: ComponentType<PillProps>;
+  export const MarkdownText: ComponentType<MarkdownTextProps>;
 }

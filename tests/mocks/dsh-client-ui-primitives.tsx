@@ -28,3 +28,17 @@ export function Modal(props: {
     <button data-testid="close-btn" onClick={props.onClose}>{props.closeLabel}</button>
   </div>, document.body);
 }
+
+export function MarkdownText({ text, labels }: {
+  text: string;
+  labels: {
+    code: { copyLabel: string; copiedLabel: string };
+    footnotes: string;
+  };
+}) {
+  if (!labels.code.copyLabel || !labels.code.copiedLabel || !labels.footnotes) {
+    throw new TypeError('MarkdownText labels are incomplete');
+  }
+  const heading = text.match(/^#\s+(.+)$/m)?.[1];
+  return <div data-dsh-markdown-text data-code-copy-label={labels.code.copyLabel}>{heading && <h1>{heading}</h1>}<pre>{text}</pre></div>;
+}
