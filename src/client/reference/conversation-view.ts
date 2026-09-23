@@ -72,7 +72,19 @@ export function mountConversationView(
     marker.title = result ? `${group.id}：${result.reason}` : group.id;
     marker.setAttribute('aria-label', `跳转到 ${group.id}`);
     if (result) marker.dataset.relevance = result.relevance;
-    marker.addEventListener('click', () => article.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+    marker.addEventListener('click', () => {
+      root.querySelectorAll('[data-located], [data-active]').forEach(element => {
+        element.removeAttribute('data-located');
+        element.removeAttribute('data-active');
+      });
+      article.dataset.located = '';
+      marker.dataset.active = '';
+      article.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      window.setTimeout(() => {
+        article.removeAttribute('data-located');
+        marker.removeAttribute('data-active');
+      }, 1900);
+    });
     navigation.appendChild(marker);
 
     const header = document.createElement('div');
@@ -141,7 +153,7 @@ export function mountConversationView(
     }
     list.appendChild(article);
   });
-  content.append(navigation, list);
+  content.append(list, navigation);
   root.appendChild(content);
   host.replaceChildren(root);
   return () => {

@@ -26,17 +26,9 @@ function fakeLlm(): ConversationLlm & { prepareCall: ReturnType<typeof vi.fn> } 
     retryPolicy: {},
     stream: async function* (options: { messages: Array<{ content: Array<{ type: string; text?: string }> }> }) {
       const prompt = options.messages[0].content[0].text ?? '';
-      const ids = [...prompt.matchAll(/^\[(q-\d+)\] USER:/gm)].map(match => match[1]);
-      const batchIds = prompt.includes('指定主题：') ? ids : ids.slice(4);
-      const items = batchIds.map(groupId => ({
-        groupId,
-        relevance: groupId === 'q-010' ? 'strong' : 'none',
-        continuity: groupId === 'q-010' ? 'returns_to_anchor' : 'none',
-        contextDependency: groupId === 'q-002' ? 'needs_previous' : 'standalone',
-        evidenceGroupIds: [groupId],
-        reason: `判断 ${groupId}`,
-      }));
-      yield { type: 'text-delta', index: 0, text: JSON.stringify({ items }) };
+      const ids = [...prompt.matchAll(/^\[(\d+)\] /gm)].map(match => Number(match[1]));
+      const items = ids.filter(id => id === 10).map(id => ({ id, level: 3 }));
+      yield { type: 'text-delta', index: 0, text: JSON.stringify(items) };
       yield { type: 'finish', reason: { kind: 'stop' } };
     },
   }));
@@ -51,19 +43,20 @@ describe('Conversation analyzer', () => {
     }, llm);
     expect(llm.prepareCall).toHaveBeenCalledTimes(1);
     expect(llm.prepareCall.mock.calls[0][0]).toMatchObject({
-      provider: 'deepseek-official', model: 'deepseek-v4-pro', reasoningEffort: 'high', maxTokens: 16000,
+      provider: 'deepseek-official', model: 'deepseek-v4-pro', reasoningEffort: 'high', maxTokens: 8000,
     });
     expect(result.items).toHaveLength(12);
-    expect(result.items.find(item => item.groupId === 'q-010')).toMatchObject({ relevance: 'strong', continuity: 'returns_to_anchor' });
+    expect(result.items.find(item => item.groupId === 'q-010')).toMatchObject({ relevance: 'strong', continuity: 'none' });
+    expect(result.promptVersion).toBe('weak-user-turns-v1');
   });
 
-  it('超过 18 组时分批且保留 2 组重叠，最终每组只保留一个结果', async () => {
+  it('超过 100 组时按 User Turn 分批并行，最终每组只保留一个结果', async () => {
     const llm = fakeLlm();
-    const result = await analyzeConversation(reference(20), 'q-010', {
+    const result = await analyzeConversation(reference(120), 'q-010', {
       provider: 'deepseek-official', model: 'deepseek-v4-pro',
     }, llm);
     expect(llm.prepareCall).toHaveBeenCalledTimes(2);
-    expect(result.items.map(item => item.groupId)).toEqual(reference(20).groups.map(group => group.id));
+    expect(result.items.map(item => item.groupId)).toEqual(reference(120).groups.map(group => group.id));
   });
 
   it('没有明确模型配置时拒绝调用', async () => {
@@ -78,5 +71,18 @@ describe('Conversation analyzer', () => {
     expect(result.topic).toBe('人的认知带宽');
     expect(result.anchorGroupId).toBeUndefined();
     expect(result.items).toHaveLength(6);
+  });
+
+  it('同一会话版本、目标、模型与 prompt 版本直接复用缓存', async () => {
+    const llm = fakeLlm();
+    const source = reference(6);
+    const first = await analyzeConversationTopic(source, '人的认知带宽', {
+      provider: 'deepseek-official', model: 'deepseek-v4-pro',
+    }, llm);
+    const second = await analyzeConversationTopic({ ...source, analysis: first }, '人的认知带宽', {
+      provider: 'deepseek-official', model: 'deepseek-v4-pro',
+    }, llm);
+    expect(second).toBe(first);
+    expect(llm.prepareCall).toHaveBeenCalledTimes(1);
   });
 });

@@ -497,9 +497,13 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
         if (!currentDoc || !currentPath) return undefined;
         const element = target instanceof Element ? target : target.parentElement;
         const card = element?.closest<HTMLElement>('[data-sift-card]');
-        if (!card || !panel.contains(card)) return undefined;
+        const conversationGroup = element?.closest<HTMLElement>('[data-sift-conversation-group]');
+        const sourceElement = card ?? conversationGroup;
+        if (!sourceElement || !panel.contains(sourceElement)) return undefined;
         return {
-          sourceId: `${currentPath}#${card.dataset.cardId ?? 'card'}`,
+          sourceId: card
+            ? `${currentPath}#${card.dataset.cardId ?? 'card'}`
+            : `${currentPath}#${conversationGroup?.dataset.siftConversationGroup ?? 'conversation'}`,
           sourceName: currentDoc.name,
         };
       }, options.thoughts.capture)

@@ -65,6 +65,9 @@ export const conversationAnalysisSchema = z.object({
   topic: z.string().optional(),
   model: z.object({ provider: z.string(), model: z.string(), reasoningEffort: z.string().optional() }),
   createdAt: z.string(),
+  promptVersion: z.string().optional(),
+  targetContentHash: z.string().optional(),
+  conversationVersion: z.string().optional(),
   items: z.array(conversationAnalysisItemSchema),
 });
 export type ConversationAnalysis = z.infer<typeof conversationAnalysisSchema>;
