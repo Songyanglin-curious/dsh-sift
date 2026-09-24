@@ -38,9 +38,10 @@ function fakeLlm(): ConversationLlm & { prepareCall: ReturnType<typeof vi.fn> } 
 describe('Conversation analyzer', () => {
   it('使用设置中的模型与思考强度，并返回有限等级结果', async () => {
     const llm = fakeLlm();
+    const events: string[] = [];
     const result = await analyzeConversation(reference(12), 'q-010', {
       provider: 'deepseek-official', model: 'deepseek-v4-pro', reasoningEffort: 'high',
-    }, llm);
+    }, llm, undefined, event => events.push(event));
     expect(llm.prepareCall).toHaveBeenCalledTimes(1);
     expect(llm.prepareCall.mock.calls[0][0]).toMatchObject({
       provider: 'deepseek-official', model: 'deepseek-v4-pro', reasoningEffort: 'high', maxTokens: 8000,
@@ -48,6 +49,10 @@ describe('Conversation analyzer', () => {
     expect(result.items).toHaveLength(12);
     expect(result.items.find(item => item.groupId === 'q-010')).toMatchObject({ relevance: 'strong', continuity: 'none' });
     expect(result.promptVersion).toBe('weak-user-turns-v1');
+    expect(events).toEqual([
+      'analyze.start', 'cache.miss', 'batches.created', 'batch.prepare.start', 'batch.prepare.end',
+      'batch.stream.start', 'batch.stream.firstChunk', 'batch.stream.end', 'batch.parse.end', 'analyze.end',
+    ]);
   });
 
   it('超过 100 组时按 User Turn 分批并行，最终每组只保留一个结果', async () => {

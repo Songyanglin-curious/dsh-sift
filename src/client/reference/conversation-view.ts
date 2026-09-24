@@ -12,6 +12,10 @@ export function mountConversationView(
   onChange: (next: ConversationReferenceDocument) => void,
   onAnalyze: (groupId: string) => Promise<void>,
   onAnalyzeTopic: (topic: string) => Promise<void>,
+  analyzing = false,
+  analysisTarget?: { readonly type: 'group'; readonly groupId: string } | { readonly type: 'topic'; readonly topic: string },
+  topicDraft?: string,
+  onTopicDraftChange?: (value: string) => void,
 ): () => void {
   const markdownDisposers: Array<() => void> = [];
   const root = document.createElement('div');
@@ -23,11 +27,30 @@ export function mountConversationView(
   topicInput.type = 'text';
   topicInput.placeholder = '输入主题，例如：人的认知带宽';
   topicInput.setAttribute('aria-label', '会话分析主题');
-  topicInput.value = reference.analysis?.topic ?? '';
+  topicInput.value = topicDraft ?? reference.analysis?.topic ?? '';
+  topicInput.addEventListener('input', () => onTopicDraftChange?.(topicInput.value));
+  const clearTopic = document.createElement('button');
+  clearTopic.type = 'button';
+  clearTopic.className = 'sift-conversation-topic-clear';
+  clearTopic.setAttribute('aria-label', '清除分析主题');
+  clearTopic.title = '清除分析主题';
+  clearTopic.textContent = '×';
+  clearTopic.hidden = topicInput.value === '';
+  topicInput.addEventListener('input', () => { clearTopic.hidden = topicInput.value === ''; });
+  clearTopic.addEventListener('click', () => {
+    topicInput.value = '';
+    clearTopic.hidden = true;
+    onTopicDraftChange?.('');
+    topicInput.focus();
+  });
+  const topicField = document.createElement('div');
+  topicField.className = 'sift-conversation-topic-field';
+  topicField.append(topicInput, clearTopic);
   const topicButton = document.createElement('button');
   topicButton.type = 'submit';
-  topicButton.textContent = '分析主题';
-  topicBar.append(topicInput, topicButton);
+  topicButton.textContent = analyzing && analysisTarget?.type === 'topic' ? '分析中…' : '分析主题';
+  topicButton.disabled = analyzing;
+  topicBar.append(topicField, topicButton);
   topicBar.addEventListener('submit', event => {
     event.preventDefault();
     const topic = topicInput.value.trim();
@@ -56,9 +79,24 @@ export function mountConversationView(
   navigation.setAttribute('aria-label', '会话关联分布');
   const list = document.createElement('div');
   list.dataset.siftConversationGroups = '';
+  const locateGroup = (article: HTMLElement, marker: HTMLElement) => {
+    root.querySelectorAll('[data-located], [data-active]').forEach(element => {
+      element.removeAttribute('data-located');
+      element.removeAttribute('data-active');
+    });
+    article.dataset.located = '';
+    marker.dataset.active = '';
+    article.scrollIntoView({ block: 'start', inline: 'nearest', behavior: 'smooth' });
+    window.setTimeout(() => {
+      article.removeAttribute('data-located');
+      marker.removeAttribute('data-active');
+    }, 1900);
+  };
   reference.groups.forEach((group, index) => {
     const article = document.createElement('article');
     article.dataset.siftConversationGroup = group.id;
+    const isAnalyzingGroup = analyzing && analysisTarget?.type === 'group' && analysisTarget.groupId === group.id;
+    if (isAnalyzingGroup) article.dataset.analyzing = '';
     if (!group.collapsed) article.dataset.expanded = '';
     const result = reference.analysis?.items.find(item => item.groupId === group.id);
     if (result) {
@@ -69,21 +107,25 @@ export function mountConversationView(
     const marker = document.createElement('button');
     marker.type = 'button';
     marker.className = 'sift-conversation-nav-marker';
+    marker.dataset.groupId = group.id;
     marker.title = result ? `${group.id}：${result.reason}` : group.id;
     marker.setAttribute('aria-label', `跳转到 ${group.id}`);
     if (result) marker.dataset.relevance = result.relevance;
     marker.addEventListener('click', () => {
-      root.querySelectorAll('[data-located], [data-active]').forEach(element => {
-        element.removeAttribute('data-located');
-        element.removeAttribute('data-active');
+      if (!group.collapsed) {
+        locateGroup(article, marker);
+        return;
+      }
+      onChange({
+        ...reference,
+        groups: reference.groups.map(item => item.id === group.id ? { ...item, collapsed: false } : item),
       });
-      article.dataset.located = '';
-      marker.dataset.active = '';
-      article.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      window.setTimeout(() => {
-        article.removeAttribute('data-located');
-        marker.removeAttribute('data-active');
-      }, 1900);
+      queueMicrotask(() => {
+        const nextArticle = host.querySelector<HTMLElement>(`[data-sift-conversation-group="${group.id}"]`);
+        const nextMarker = Array.from(host.querySelectorAll<HTMLElement>('.sift-conversation-nav-marker'))
+          .find(item => item.dataset.groupId === group.id);
+        if (nextArticle && nextMarker) locateGroup(nextArticle, nextMarker);
+      });
     });
     navigation.appendChild(marker);
 
@@ -102,7 +144,8 @@ export function mountConversationView(
     const analyze = document.createElement('button');
     analyze.type = 'button';
     analyze.className = 'sift-conversation-analyze';
-    analyze.textContent = reference.analysis?.anchorGroupId === group.id ? '已分析' : '分析关联';
+    analyze.textContent = isAnalyzingGroup ? '分析中…' : reference.analysis?.anchorGroupId === group.id ? '已分析' : '分析关联';
+    analyze.disabled = analyzing;
     analyze.title = '以此问答为锚点分析整场会话';
     analyze.addEventListener('click', event => {
       event.stopPropagation();

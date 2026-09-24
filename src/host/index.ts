@@ -1,7 +1,8 @@
 import type { Context } from '@deepseek-ai/cordis';
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
 import { z } from 'zod';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { readMaterials, listMaterialFiles, mutateMaterials, readMaterial } from './materials.js';
 import { createDocumentChangeTool } from './document/change-tool.js';
@@ -38,7 +39,7 @@ import {
   setDocumentRelations as writeDocumentRelations,
 } from './reference/store.js';
 import { isConversationReference, type ReferenceDocument } from '../references.js';
-import { analyzeConversation, analyzeConversationTopic } from './conversation/analyzer.js';
+import { analyzeConversation, analyzeConversationTopic, type ConversationAnalysisTiming } from './conversation/analyzer.js';
 import type { ToolRuntimeContract } from './tools/contract.js';
 import {
   ConversationAnalysisSettingsSchema,
@@ -127,6 +128,41 @@ export class SiftService extends TypertRemoteService {
   private readonly analysisSettings: { get(): ConversationAnalysisSettings };
   private readonly llm: Context['llm'];
   private readonly logger: Context['logger'];
+  private readonly activeConversationAnalyses = new Set<string>();
+  private analysisTiming(root: string, analysisId: string, requestStartedAt: number): { timing: ConversationAnalysisTiming; flush: () => Promise<void> } {
+    const directory = resolve(root, '.sift');
+    const logPath = resolve(directory, 'sift-analysis.log');
+    let writes: Promise<void> = mkdir(directory, { recursive: true }).then(() => undefined);
+    const summary: Record<string, number> = {};
+    const writeRecord = (record: Record<string, string | number | boolean>) => {
+      this.logger.info(`[Sift 会话分析] ${JSON.stringify(record)}`);
+      writes = writes.then(() => appendFile(logPath, `${JSON.stringify(record)}\n`, 'utf8'));
+    };
+    const timing: ConversationAnalysisTiming = (event, details = {}) => {
+      const record = {
+        timestamp: new Date().toISOString(),
+        analysisId,
+        event,
+        requestElapsedMs: Date.now() - requestStartedAt,
+        ...details,
+      };
+      if (event === 'reference.read.end' && typeof details.elapsedMs === 'number') summary.readMs = details.elapsedMs;
+      if (event === 'batch.stream.firstChunk' && typeof details.waitMs === 'number') summary.firstChunkMs = Math.max(summary.firstChunkMs ?? 0, details.waitMs);
+      if (event === 'batch.stream.end' && typeof details.streamMs === 'number') summary.streamMs = Math.max(summary.streamMs ?? 0, details.streamMs);
+      if (event === 'batch.parse.end' && typeof details.parseMs === 'number') summary.parseMs = (summary.parseMs ?? 0) + details.parseMs;
+      if (event === 'reference.write.end' && typeof details.elapsedMs === 'number') summary.writeMs = details.elapsedMs;
+      writeRecord(record);
+      if (event === 'remote.end' || event === 'remote.error') {
+        const totalMs = Date.now() - requestStartedAt;
+        const outputMs = Math.max(0, (summary.streamMs ?? 0) - (summary.firstChunkMs ?? 0));
+        const status = event === 'remote.end' ? '完成' : '失败';
+        const message = `分析${status}：总计 ${totalMs}ms；读取 ${summary.readMs ?? 0}ms；等待 AI 首次响应 ${summary.firstChunkMs ?? 0}ms；AI 输出 ${outputMs}ms；解析 ${summary.parseMs ?? 0}ms；写盘 ${summary.writeMs ?? 0}ms。`;
+        writeRecord({ timestamp: new Date().toISOString(), analysisId, event: 'summary', requestElapsedMs: totalMs, status, message });
+        this.logger.info(`[Sift 会话分析] ${message}`);
+      }
+    };
+    return { timing, flush: () => writes };
+  }
   /** 当前界面明确绑定的唯一 AI 可写 Document。 */
   private activeDocument?: { workspaceId: string; documentId: string };
   private workspacePath(id: string): string {
@@ -315,30 +351,74 @@ export class SiftService extends TypertRemoteService {
 
   @Remote
   async analyzeConversation(input: { workspaceId: string; path: string; anchorGroupId: string }) {
+    const requestStartedAt = Date.now();
+    const analysisId = randomUUID().slice(0, 8);
     const root = this.workspacePath(input.workspaceId);
+    const analysisKey = `${input.workspaceId}:${input.path}`;
+    if (this.activeConversationAnalyses.has(analysisKey)) throw new Error('当前 Reference 正在进行关联分析，请等待本次分析完成。');
+    this.activeConversationAnalyses.add(analysisKey);
+    try {
+    const { timing, flush } = this.analysisTiming(root, analysisId, requestStartedAt);
+    timing('remote.start', { targetType: 'group' });
+    const readStartedAt = Date.now();
     const reference = await readReferenceFile(root, input.path);
+    timing('reference.read.end', { elapsedMs: Date.now() - readStartedAt });
     if (!isConversationReference(reference)) throw new Error('当前参考不是会话类型。');
     let analysis;
     try {
-      analysis = await analyzeConversation(reference, input.anchorGroupId, this.analysisSettings.get(), this.llm);
+      analysis = await analyzeConversation(reference, input.anchorGroupId, this.analysisSettings.get(), this.llm, undefined, timing);
     } catch (error) {
+      timing('remote.error', { message: error instanceof Error ? error.message : String(error) });
+      await flush();
       this.logger.error(error instanceof Error ? error.stack ?? error.message : String(error));
       throw error;
     }
     const next = { ...reference, analysis };
+    const writeStartedAt = Date.now();
     await writeReferenceFile(root, input.path, next);
+    timing('reference.write.end', { elapsedMs: Date.now() - writeStartedAt });
+    timing('remote.end', { totalMs: Date.now() - requestStartedAt });
+    await flush();
     return next;
+    } finally {
+      this.activeConversationAnalyses.delete(analysisKey);
+    }
   }
 
   @Remote
   async analyzeConversationTopic(input: { workspaceId: string; path: string; topic: string }) {
+    const requestStartedAt = Date.now();
+    const analysisId = randomUUID().slice(0, 8);
     const root = this.workspacePath(input.workspaceId);
+    const analysisKey = `${input.workspaceId}:${input.path}`;
+    if (this.activeConversationAnalyses.has(analysisKey)) throw new Error('当前 Reference 正在进行关联分析，请等待本次分析完成。');
+    this.activeConversationAnalyses.add(analysisKey);
+    try {
+    const { timing, flush } = this.analysisTiming(root, analysisId, requestStartedAt);
+    timing('remote.start', { targetType: 'topic' });
+    const readStartedAt = Date.now();
     const reference = await readReferenceFile(root, input.path);
+    timing('reference.read.end', { elapsedMs: Date.now() - readStartedAt });
     if (!isConversationReference(reference)) throw new Error('当前参考不是会话类型。');
-    const analysis = await analyzeConversationTopic(reference, input.topic, this.analysisSettings.get(), this.llm);
+    let analysis;
+    try {
+      analysis = await analyzeConversationTopic(reference, input.topic, this.analysisSettings.get(), this.llm, undefined, timing);
+    } catch (error) {
+      timing('remote.error', { message: error instanceof Error ? error.message : String(error) });
+      await flush();
+      this.logger.error(error instanceof Error ? error.stack ?? error.message : String(error));
+      throw error;
+    }
     const next = { ...reference, analysis };
+    const writeStartedAt = Date.now();
     await writeReferenceFile(root, input.path, next);
+    timing('reference.write.end', { elapsedMs: Date.now() - writeStartedAt });
+    timing('remote.end', { totalMs: Date.now() - requestStartedAt });
+    await flush();
     return next;
+    } finally {
+      this.activeConversationAnalyses.delete(analysisKey);
+    }
   }
 
   @Remote

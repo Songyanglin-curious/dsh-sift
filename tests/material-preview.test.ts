@@ -4,6 +4,16 @@ import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import { previewMaterial } from '../src/client/material-preview.js';
 
+async function waitForElement(root: ParentNode, selector: string, timeoutMs = 1000): Promise<Element> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const element = root.querySelector(selector);
+    if (element) return element;
+    await new Promise(resolve => setTimeout(resolve, 5));
+  }
+  throw new Error(`等待渲染超时：${selector}`);
+}
+
 describe('real material renderers', () => {
   it('renders a real DOCX with docx-preview inside a script-disabled frame', async () => {
     const require = createRequire(import.meta.url);
@@ -22,7 +32,7 @@ describe('real material renderers', () => {
   it('renders Markdown using DSH MarkdownText, read-only', async () => {
     const root = document.createElement('div'); document.body.append(root);
     const dispose = await previewMaterial(root, { id: 'md', kind: 'file', name: 'note.md', target: 'note.md' }, new TextEncoder().encode('# 素材标题\n\n正文内容'), new AbortController().signal);
-    await new Promise(resolve => setTimeout(resolve, 0));
+    await waitForElement(root, '[data-dsh-markdown-text] h1');
     expect(root.querySelector('h1')?.textContent).toBe('素材标题');
     expect(root.querySelector('[data-dsh-markdown-text]')).not.toBeNull();
     expect(root.querySelector('[contenteditable]')).toBeNull();
@@ -32,7 +42,7 @@ describe('real material renderers', () => {
     const root = document.createElement('div'); document.body.append(root);
     const readme = await readFile('README.md');
     const dispose = await previewMaterial(root, { id: 'readme', kind: 'file', name: 'README.md', target: 'README.md' }, readme, new AbortController().signal);
-    await new Promise(resolve => setTimeout(resolve, 0));
+    await waitForElement(root, '[data-dsh-markdown-text] h1');
     expect(root.querySelector('[data-dsh-markdown-text]')).not.toBeNull();
     expect(root.querySelector('[data-code-copy-label]')?.getAttribute('data-code-copy-label')).toBe('复制代码');
     expect(root.querySelector('h1')?.textContent).toBe('Sift');

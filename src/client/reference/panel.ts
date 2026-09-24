@@ -65,6 +65,9 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
   let history = createHistory<ReferenceCardData[]>([]);
   let deleting = false;
   let disposeConversationView: (() => void) | undefined;
+  let conversationAnalysisRunning = false;
+  let conversationAnalysisTarget: { type: 'group'; groupId: string } | { type: 'topic'; topic: string } | undefined;
+  let conversationTopicDraft = '';
   const cardDocument = (): CardReferenceDocument | null => currentDoc && 'cards' in currentDoc ? currentDoc : null;
   // 当前工作区中"激活"的 Reference 路径；只有这些会出现在 Tab Bar。
   let freeReferenceTabs: string[] = [];
@@ -407,27 +410,50 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
         schedulePersist();
         updateSelectionVisibility();
       }, async anchorGroupId => {
-        if (!currentPath) return;
+        if (!currentPath || conversationAnalysisRunning) return;
+        conversationAnalysisRunning = true;
+        conversationAnalysisTarget = { type: 'group', groupId: anchorGroupId };
+        clearConversationAnalysis();
         try {
           currentDoc = await options.api.analyzeConversation(currentPath, anchorGroupId);
-          updateSelectionVisibility();
         } catch (error) {
           canvasApi.notify(error instanceof Error ? error.message : '会话关联分析失败。');
           throw error;
+        } finally {
+          conversationAnalysisRunning = false;
+          conversationAnalysisTarget = undefined;
+          updateSelectionVisibility();
         }
       }, async topic => {
-        if (!currentPath) return;
+        if (!currentPath || conversationAnalysisRunning) return;
+        conversationAnalysisRunning = true;
+        conversationAnalysisTarget = { type: 'topic', topic };
+        clearConversationAnalysis();
         try {
           currentDoc = await options.api.analyzeConversationTopic(currentPath, topic);
-          updateSelectionVisibility();
         } catch (error) {
           canvasApi.notify(error instanceof Error ? error.message : '会话主题分析失败。');
           throw error;
+        } finally {
+          conversationAnalysisRunning = false;
+          conversationAnalysisTarget = undefined;
+          updateSelectionVisibility();
         }
+      }, conversationAnalysisRunning, conversationAnalysisTarget, conversationTopicDraft, value => {
+        conversationTopicDraft = value;
       });
     } else {
       conversationHost.replaceChildren();
     }
+  };
+
+  const clearConversationAnalysis = () => {
+    if (!currentDoc || !('kind' in currentDoc) || currentDoc.kind !== 'conversation') return;
+    if (currentDoc.analysis) {
+      const { analysis: _previousAnalysis, ...withoutAnalysis } = currentDoc;
+      currentDoc = withoutAnalysis;
+    }
+    updateSelectionVisibility();
   };
 
   const selectReference = async (path: string | null, publishSelection = true): Promise<void> => {
@@ -439,6 +465,9 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
       if (!options.workspace && !freeReferenceTabs.includes(path)) freeReferenceTabs.push(path);
       try {
         currentDoc = await options.api.loadReference(path);
+        conversationTopicDraft = 'kind' in currentDoc && currentDoc.kind === 'conversation'
+          ? currentDoc.analysis?.topic ?? ''
+          : '';
         history.reset('cards' in currentDoc ? [...currentDoc.cards] : []);
       } catch (error) {
         console.error('Sift: 加载参考失败', error);
