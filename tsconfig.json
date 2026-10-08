@@ -8,7 +8,7 @@
     "esModuleInterop": true,
     "jsx": "react-jsx",
     "declaration": true,
-    "declarationMap": true,
+    "declarationMap": false,
     "emitDeclarationOnly": true,
     "outDir": "dist/types",
     "rootDir": "src",

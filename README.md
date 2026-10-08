@@ -71,6 +71,44 @@ AI 提出修改建议
 继续补 Reference，重复下一轮
 ```
 
+## 安装
+
+当前发布版只适配 DSH `0.1.5-rc.2`，需要 Node.js 24 或更高版本。建议使用独立的 `sift` Profile，避免影响日常使用的其他 DSH Profile。
+
+首次创建 Profile 时，先安装同版本的 Web 应用：
+
+```powershell
+dsh plugin --profile sift add @deepseek-ai/dsh-web-app@0.1.5-rc.2
+```
+
+Sift 使用 `koffi` 访问 Windows 原生能力。安装前确认 `%USERPROFILE%\.dsh\profiles\sift\pnpm-workspace.yaml` 允许构建：
+
+```yaml
+allowBuilds:
+  koffi: true
+```
+
+然后安装当前 RC 版本：
+
+```powershell
+dsh plugin --profile sift add @songyanglin/dsh-sift@rc
+```
+
+启动该 Profile：
+
+```powershell
+dsh --profile sift --port 9083 --no-open
+```
+
+更新或卸载：
+
+```powershell
+dsh plugin --profile sift update @songyanglin/dsh-sift
+dsh plugin --profile sift remove @songyanglin/dsh-sift
+```
+
+Sift `0.1.5-rc.2` 与 DSH `0.1.5-rc.2` 对应；适配新的 DSH 版本时，Sift 会同步发布新的对应版本。
+
 ## 本地开发
 
 当前开发环境要求：
@@ -98,7 +136,7 @@ pnpm dev:status
 pnpm dev:clean
 ```
 
-开发 Web 默认地址为 `http://127.0.0.1:9082`，可以通过 `SIFT_DEV_PORT` 修改端口。当前必需接口尚未进入已发布 DSH 包，开发脚本会校验 `SIFT_DSH_SOURCE` 与源码版本；旧 DSH 只显示升级提示，不退回旧弹窗方案。
+开发 Web 默认地址为 `http://127.0.0.1:9082`，可以通过 `SIFT_DEV_PORT` 修改端口。开发脚本会校验 `SIFT_DSH_SOURCE` 的版本；不匹配的 DSH 只显示升级提示，不退回旧弹窗方案。
 
 开发期间，Client 修改会重新构建并交给 DSH Client HMR；Host、Bundle patch 或依赖修改会触发受控重启。
 
@@ -108,4 +146,4 @@ pnpm dev:clean
 pnpm verify:package
 ```
 
-更多细节见[文档索引](docs/index.md)。本仓库开发不执行 npm 发布或 Git 推送。
+更多细节见[文档索引](docs/index.md)。正式发布前仍需在纯 npm DSH Profile 中完成人工浏览器验收；自动检查不能代替真实交互验收。

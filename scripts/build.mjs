@@ -18,7 +18,7 @@ export async function buildHost(outdir = resolve(root, 'dist')) {
     format: 'esm',
     packages: 'external',
     target: 'node24',
-    sourcemap: true,
+    sourcemap: false,
   });
 }
 
@@ -32,7 +32,7 @@ export async function buildClient(outdir = resolve(root, 'dist')) {
     platform: 'browser',
     format: 'cjs',
     target: 'es2022',
-    sourcemap: true,
+    sourcemap: false,
     external: ['react', 'react/jsx-runtime', 'react-dom', 'react-dom/client', '@deepseek-ai/dsh-client-ui-primitives'],
     plugins: [{
       name: 'inline-editor-css',

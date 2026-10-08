@@ -1,9 +1,10 @@
 {
   "name": "@songyanglin/dsh-sift",
   "description": "由 AI 协作的个人学习型知识梳理工作台",
-  "version": "0.1.0",
+  "version": "0.1.5-rc.2",
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "type": "module",
   "main": "dist/host/index.js",
@@ -25,9 +26,22 @@
     "LICENSE"
   ],
   "license": "MIT",
+  "author": "songyanglin",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Songyanglin-curious/dsh-sift.git"
+  },
+  "homepage": "https://github.com/Songyanglin-curious/dsh-sift#readme",
+  "bugs": {
+    "url": "https://github.com/Songyanglin-curious/dsh-sift/issues"
+  },
   "keywords": [
+    "dsh",
     "dsh-plugin",
-    "knowledge-workbench"
+    "deepseek-harness",
+    "knowledge-workbench",
+    "document",
+    "reference"
   ],
   "scripts": {
     "build": "node scripts/build.mjs",
