@@ -52,8 +52,8 @@ function context(profile: ProfileResult, workspaceId: string, sessionId: string)
   return {
     slots: { inject: (_name: string, factory: () => unknown) => factory(), register: () => () => {} },
     workspaces: { list: source({ items: [{ workspaceId, title: 'W', sessionIds: [sessionId] }], phase: 'ready' as const }) },
-    sessions: { list: source({ current: sessionId, phase: 'ready' as const }) },
-    uiWorkspace: { pickDirectory: async () => null, openWorkspace: async () => {} },
+    sessions: { list: source({ ids: [sessionId], byId: {}, phase: 'ready' as const }) },
+    uiWorkspace: { pickDirectory: async () => null, openWorkspace: async () => {}, selection: source({ sessionId }) },
     remote: { $mount: async () => () => {} },
     get: (name: string) => name === 'remote.sift' ? service : undefined,
     effect: (factory: () => unknown) => { factory(); },

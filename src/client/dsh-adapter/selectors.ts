@@ -5,7 +5,7 @@
  * 必须先在这里加一个有名字、带说明的选择器，并在
  * docs/dsh-reference-api-research.md 同级的适配记录里注明目标 DSH 版本。
  *
- * 目标版本：DSH 0.1.5-rc.2。升级 DSH 后重跑适配验证，只改本文件与 layout.ts。
+ * 目标版本：DSH 0.2.0-rc.2。升级 DSH 后重跑适配验证，只改本文件与 layout.ts。
  */
 
 /** 右侧栏（原生对话所在列）的锚点；DSH 会把它渲染成纵向两列容器。 */
@@ -23,7 +23,7 @@ const WORKSPACE_ADD_BUTTON = 'button[aria-label="添加工作区"]';
 /**
  * 三栏布局的宿主容器。
  *
- * 0.1.5-rc.2 没有公开的 Conversation 包装插槽，因此通过右栏锚点的前一个兄弟
+ * 0.2.0-rc.2 没有公开的 Conversation 包装插槽，因此通过右栏锚点的前一个兄弟
  * 节点取得 center column，再在它内部追加 Sift 栏位并用 CSS Grid 把原生对话排到最后。
  * 找不到时返回 null —— 调用方必须放弃启用三栏，而不是继续重排页面（§7.2）。
  */

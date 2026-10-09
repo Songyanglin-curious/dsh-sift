@@ -64,7 +64,7 @@ async function runBatch(llm: ConversationLlm, config: LlmCallConfig, target: str
   timing?.('batch.prepare.end', { batch: batchIndex, elapsedMs: Date.now() - batchStartedAt });
   const options: GenerateOptions = {
     ...prepared.config,
-    messages: [createUserMessage({ content: [{ type: 'text', text: buildPrompt(target, turns) }], source: { kind: 'plugin', plugin: '@songyanglin/dsh-sift' } })], signal,
+    messages: [createUserMessage({ content: [{ type: 'text', text: buildPrompt(target, turns) }], source: { kind: 'user' } })], signal,
   };
   let text = '', failure: string | undefined;
   let firstChunkAt: number | undefined;

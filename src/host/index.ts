@@ -1,6 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis';
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
-import { z } from 'zod';
+import Schema from '@deepseek-ai/schemastery';
 import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
@@ -42,8 +42,6 @@ import { isConversationReference, type ReferenceDocument } from '../references.j
 import { analyzeConversation, analyzeConversationTopic, type ConversationAnalysisTiming } from './conversation/analyzer.js';
 import type { ToolRuntimeContract } from './tools/contract.js';
 import {
-  ConversationAnalysisSettingsSchema,
-  SIFT_SETTINGS_NAMESPACE,
   type ConversationAnalysisSettings,
 } from '../settings.js';
 
@@ -71,11 +69,6 @@ interface WorkspaceRegistry {
 interface SiftContext extends Context {
   workspaceRegistry: WorkspaceRegistry;
   tools: ToolRuntimeContract;
-  settings: {
-    register<T>(namespace: string, schema: unknown, options?: { base?: T; applies?: 'live' | 'restart' }): {
-      get(): T;
-    };
-  };
 }
 
 export async function readWorkspaceProfile(workspace: WorkspaceRecord): Promise<WorkspaceProfileResult> {
@@ -114,18 +107,23 @@ function isMissingFile(error: unknown): boolean {
 }
 
 /** 插件配置（写在 cordis.patch.yml 的 sift 行 config 段）。 */
-export const Config = z.object({
+export const Config = Schema.object({
   /** 打开卡片上「文件」来源时使用的编辑器可执行文件绝对路径；留空则用系统默认程序。 */
-  editorCommand: z.string().optional(),
-}).default({});
-export type SiftConfig = z.infer<typeof Config>;
+  editorCommand: Schema.string().description('点击来源文件时使用的编辑器可执行文件绝对路径；留空则使用系统默认程序。').volatile(),
+  /** Sift 会话关联分析使用的 DSH 模型提供方。 */
+  provider: Schema.string().description('Sift 会话关联分析使用的 DSH 模型提供方。').volatile(),
+  /** Sift 会话关联分析使用的 DSH 模型。 */
+  model: Schema.string().description('Sift 会话关联分析使用的 DSH 模型。').volatile(),
+  /** 当前模型支持的思考强度；未设置时使用模型默认值。 */
+  reasoningEffort: Schema.string().description('当前模型支持的思考强度；未设置时使用模型默认值。').volatile(),
+});
+export type SiftConfig = ReturnType<typeof Config>;
 
 export class SiftService extends TypertRemoteService {
-  static inject = ['workspaceRegistry', 'tools', 'settings', 'llm'];
+  static inject = ['workspaceRegistry', 'tools', 'llm'];
   static Config = Config;
   private readonly registry: WorkspaceRegistry;
   private readonly config: SiftConfig;
-  private readonly analysisSettings: { get(): ConversationAnalysisSettings };
   private readonly llm: Context['llm'];
   private readonly logger: Context['logger'];
   private readonly activeConversationAnalyses = new Set<string>();
@@ -315,7 +313,7 @@ export class SiftService extends TypertRemoteService {
   @Remote
   async openSourcePath(input: { path: string }) {
     try {
-      await openPathInEditor(input.path, { editorCommand: this.config.editorCommand });
+      await openPathInEditor(input.path, { editorCommand: this.config.editorCommand.get() });
     } catch (error) {
       if (error instanceof OpenPathError) throw error;
       throw new OpenPathError(error instanceof Error ? error.message : String(error));
@@ -366,7 +364,7 @@ export class SiftService extends TypertRemoteService {
     if (!isConversationReference(reference)) throw new Error('当前参考不是会话类型。');
     let analysis;
     try {
-      analysis = await analyzeConversation(reference, input.anchorGroupId, this.analysisSettings.get(), this.llm, undefined, timing);
+      analysis = await analyzeConversation(reference, input.anchorGroupId, this.getAnalysisSettings(), this.llm, undefined, timing);
     } catch (error) {
       timing('remote.error', { message: error instanceof Error ? error.message : String(error) });
       await flush();
@@ -402,7 +400,7 @@ export class SiftService extends TypertRemoteService {
     if (!isConversationReference(reference)) throw new Error('当前参考不是会话类型。');
     let analysis;
     try {
-      analysis = await analyzeConversationTopic(reference, input.topic, this.analysisSettings.get(), this.llm, undefined, timing);
+      analysis = await analyzeConversationTopic(reference, input.topic, this.getAnalysisSettings(), this.llm, undefined, timing);
     } catch (error) {
       timing('remote.error', { message: error instanceof Error ? error.message : String(error) });
       await flush();
@@ -439,18 +437,23 @@ export class SiftService extends TypertRemoteService {
     return {};
   }
 
-  constructor(ctx: SiftContext, config: SiftConfig = {}) {
+  private getAnalysisSettings(): ConversationAnalysisSettings {
+    const provider = this.config.provider.get();
+    const model = this.config.model.get();
+    const reasoningEffort = this.config.reasoningEffort.get();
+    return {
+      ...(provider === undefined ? {} : { provider }),
+      ...(model === undefined ? {} : { model }),
+      ...(reasoningEffort === undefined ? {} : { reasoningEffort }),
+    };
+  }
+
+  constructor(ctx: SiftContext, config: SiftConfig) {
     super(ctx, 'sift');
     this.registry = ctx.workspaceRegistry;
     this.config = config;
     this.llm = ctx.llm;
     this.logger = ctx.logger;
-    this.analysisSettings = ctx.settings.register(
-      SIFT_SETTINGS_NAMESPACE,
-      ConversationAnalysisSettingsSchema,
-      { base: {}, applies: 'live' },
-    );
-    // 注册即返回精确 disposer，随本 ctx 卸载自动回收，无需再包一层 effect。
     ctx.tools.register(createDocumentChangeTool(
       async () => {
         const active = this.activeDocument;

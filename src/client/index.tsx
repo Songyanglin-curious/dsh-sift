@@ -27,6 +27,7 @@ import {
     resolveCurrentWorkspace,
     shouldEnableSift,
     type ProfileResult,
+    type SessionSelectionSource,
     type SessionSnapshot,
     type WorkspaceSnapshot,
     type WorkspaceView,
@@ -66,14 +67,19 @@ interface ClientContext {
     slots: { inject(name: string, factory: () => unknown): unknown; register(options: { name: string; id?: string; key?: string; order?: number; label?: () => string; inject?: (sessionId: string) => Record<string, unknown> }, component: ComponentType | unknown): () => void }
     workspaces?: { list: Source<WorkspaceSnapshot>; create(input: { path: string }): Promise<WorkspaceView> }
     sessions?: { list: Source<SessionSnapshot>; scope(sessionId: string): { bail(...args: unknown[]): unknown } | undefined }
-    uiWorkspace?: { pickDirectory(): Promise<string | null>; openWorkspace(workspaceId: string): Promise<void> }
+    uiWorkspace?: {
+        pickDirectory(): Promise<string | null>;
+        openWorkspace(workspaceId: string): Promise<void>;
+        /** DSH 0.2 Workspace 导航使用的当前主会话快照。 */
+        selection?: SessionSelectionSource;
+    }
     inputTriggers?: InputTriggerServiceContract
     remote: {
         $mount(contribution: typeof TYPERT_REMOTE): Promise<() => void | Promise<void>>;
         sift?: SiftRemote;
         session?: { modelCatalog(): Promise<ModelCatalog | { ok: true; value: ModelCatalog }> };
     }
-    settingsScope?: { bind<T>(spec: { namespace: string; decode?: (section: unknown) => T | undefined }): SettingsScope<T> }
+    configForms?: { get<T>(entryId: string): SettingsScope<T> }
     get?(name: string): unknown
     effect?(factory: () => () => void | Promise<void>, label?: string): unknown
     startupError?: string
@@ -88,13 +94,16 @@ const SIFT_COLUMNS: readonly [ColumnSpec, ColumnSpec] = [
 function noopSubscribe() { return () => { } }
 const EMPTY_WORKSPACES: WorkspaceSnapshot = { items: [], phase: 'pending' };
 const EMPTY_SESSIONS: SessionSnapshot = { phase: 'pending' };
+const EMPTY_SELECTION: ReturnType<SessionSelectionSource['getSnapshot']> = {};
 
-function WorkspaceProfileBadge({ ctx }: { ctx: ClientContext }) {
+function WorkspaceProfileBadge({ ctx, selection }: { ctx: ClientContext; selection?: SessionSelectionSource }) {
     const workspaces = ctx.workspaces?.list;
     const sessions = ctx.sessions?.list;
     const workspaceSnapshot = useSyncExternalStore(workspaces ? listener => workspaces.subscribe(listener) : noopSubscribe, workspaces ? () => workspaces.getSnapshot() : () => EMPTY_WORKSPACES);
     const sessionSnapshot = useSyncExternalStore(sessions ? listener => sessions.subscribe(listener) : noopSubscribe, sessions ? () => sessions.getSnapshot() : () => EMPTY_SESSIONS);
-    const workspace = resolveCurrentWorkspace(workspaceSnapshot, sessionSnapshot);
+    const selectionSnapshot = useSyncExternalStore(selection ? listener => selection.subscribe(listener) : noopSubscribe, selection ? () => selection.getSnapshot() : () => EMPTY_SELECTION);
+    const currentSessionId = selectionSnapshot.sessionId;
+    const workspace = resolveCurrentWorkspace(workspaceSnapshot, currentSessionId);
     const [state, setState] = useState<{ id?: string; result?: ProfileResult; loading: boolean }>({ loading: false });
     const latestReader = useRef<ReturnType<typeof createLatestProfileReader> | undefined>(undefined);
 
@@ -129,9 +138,10 @@ function WorkspaceProfileBadge({ ctx }: { ctx: ClientContext }) {
 import { installWorkspaceTypeCreator } from './workspace-creator.js';
 export { installWorkspaceTypeCreator };
 
-export const inject = ['slots', 'workspaces', 'sessions', 'remote', 'remote.session', 'uiWorkspace', 'inputTriggers', 'settingsScope'];
+export const inject = ['slots', 'workspaces', 'sessions', 'remote', 'remote.session', 'uiWorkspace', 'inputTriggers', 'configForms'];
 
 export function apply(ctx: ClientContext): void {
+    const selection = ctx.uiWorkspace?.selection;
     type MountedRemote = { [K in keyof SiftRemote]: (input: Parameters<SiftRemote[K]>[0]) => Promise<Awaited<ReturnType<SiftRemote[K]>> | { ok: true; value: Awaited<ReturnType<SiftRemote[K]>> }> };
     const mounted = (async (): Promise<MountedRemote> => {
         const disposeRemote = await ctx.remote.$mount(TYPERT_REMOTE);
@@ -172,11 +182,8 @@ export function apply(ctx: ClientContext): void {
         remote: { value: { sift: siftRemote }, writable: false, configurable: true, enumerable: true },
     }) as ClientContext;
 
-    if (ctx.settingsScope && ctx.remote.session) {
-        const scope = ctx.settingsScope.bind<ConversationAnalysisSettings>({
-            namespace: SIFT_SETTINGS_NAMESPACE,
-            decode: value => typeof value === 'object' && value !== null ? value as ConversationAnalysisSettings : undefined,
-        });
+    if (ctx.configForms && ctx.remote.session) {
+        const scope = ctx.configForms.get<ConversationAnalysisSettings>(SIFT_SETTINGS_NAMESPACE);
         const loadModelCatalog = async () => unwrap(await ctx.remote.session!.modelCatalog());
         ctx.slots.inject('settings.section', () => ctx.slots.register({
             name: 'settings.section',
@@ -188,7 +195,7 @@ export function apply(ctx: ClientContext): void {
     }
 
     //侧边下方插槽展示当前的工作区是哪个以及类型
-    ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({ name: 'sidebar.footer.action', id: 'sift-workspace-profile', order: 90 }, () => <WorkspaceProfileBadge ctx={remoteContext} />));
+    ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({ name: 'sidebar.footer.action', id: 'sift-workspace-profile', order: 90 }, () => <WorkspaceProfileBadge ctx={remoteContext} selection={selection} />));
     if (typeof document === 'undefined') return;
 
     const disposeCreator = installWorkspaceTypeCreator(ctx, input => remoteContext.remote.sift!.setWorkspaceProfile(input));
@@ -284,7 +291,7 @@ export function apply(ctx: ClientContext): void {
 
     const reconcile = async () => {
         const request = ++generation;
-        const workspace = resolveCurrentWorkspace(ctx.workspaces?.list.getSnapshot(), ctx.sessions?.list.getSnapshot());
+        const workspace = resolveCurrentWorkspace(ctx.workspaces?.list.getSnapshot(), selection?.getSnapshot().sessionId);
         if (!workspace) { clearLayout(); return; }
         try {
             const profile = await latestProfile(workspace.workspaceId);
@@ -296,7 +303,8 @@ export function apply(ctx: ClientContext): void {
 
     const disposeWorkspaces = ctx.workspaces?.list.subscribe(() => { void reconcile(); });
     const disposeSessions = ctx.sessions?.list.subscribe(() => { void reconcile(); });
-    ctx.effect?.(() => () => { disposeWorkspaces?.(); disposeSessions?.(); clearLayout(); }, 'sift: native conversation three-column layout');
+    const disposeSelection = selection?.subscribe(() => { void reconcile(); });
+    ctx.effect?.(() => () => { disposeWorkspaces?.(); disposeSessions?.(); disposeSelection?.(); clearLayout(); }, 'sift: native conversation three-column layout');
     void reconcile();
 }
 

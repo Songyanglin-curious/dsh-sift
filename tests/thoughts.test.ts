@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { detectEnd, detectOffset, formatThought, thoughtLabel, thoughtRef } from '../src/client/thoughts/model.js';
+import { detectEnd, detectOffset, formatThought, resolveThoughtSessionId, thoughtLabel, thoughtRef } from '../src/client/thoughts/model.js';
 
 describe('本轮批注', () => {
   it('把用户批注作为主体，并附带区域、来源、选中信息和分隔线', () => {
@@ -23,5 +23,10 @@ describe('本轮批注', () => {
     expect(detectEnd('ab@thought-one  @thought-2z', occurrences)).toBe(7);
     expect(detectOffset(occurrences[0], occurrences)).toBe(2);
     expect(detectOffset(occurrences[1], occurrences)).toBe(5);
+  });
+
+  it('在 DSH 0.2 中从 Workspace 选择状态读取当前会话', () => {
+    expect(resolveThoughtSessionId({ sessionId: 'session-02' }, {})).toBe('session-02');
+    expect(resolveThoughtSessionId(undefined, { current: 'session-01' })).toBe('session-01');
   });
 });

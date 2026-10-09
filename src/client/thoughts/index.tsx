@@ -1,7 +1,7 @@
 import { useSyncExternalStore, useState } from 'react';
 import thoughtCss from './thoughts.css?inline';
 import { injectStyle, SIFT_PLUGIN_ID } from '../renderer/inject-style.js';
-import { detectEnd, detectOffset, formatThought, SIFT_THOUGHT_SOURCE, thoughtLabel, thoughtRef, type Thought, type ThoughtSelection } from './model.js';
+import { detectEnd, detectOffset, formatThought, resolveThoughtSessionId, SIFT_THOUGHT_SOURCE, thoughtLabel, thoughtRef, type Thought, type ThoughtSelection } from './model.js';
 import type { InputTriggerSource, TokenSpan } from '../dsh-adapter/input-trigger.js';
 
 interface InputOccurrence { readonly source: string; readonly ref: string; readonly offset: number; readonly length: number }
@@ -121,6 +121,7 @@ function ThoughtEdit({ thought, onCancel, onSave }: { thought: Thought; onCancel
 export interface ThoughtFeatureHost {
   readonly inputTriggers: { registerSource(source: InputTriggerSource): () => void };
   readonly sessions: { list: { getSnapshot(): { current?: string } }; scope(sessionId: string): ScopedContext | undefined };
+  readonly uiWorkspace?: { selection?: { getSnapshot(): { sessionId?: string } } };
   readonly slots: {
     inject(name: string, factory: () => unknown): unknown;
     register(options: { name: string; id: string; order?: number; inject?: (sessionId: string) => Record<string, unknown> }, component: unknown): () => void;
@@ -164,7 +165,10 @@ export function installThoughtFeature(ctx: ThoughtFeatureHost): ThoughtFeature {
 
   return {
     capture(selection, anchor, bounds) {
-      const sessionId = ctx.sessions.list.getSnapshot().current;
+      const sessionId = resolveThoughtSessionId(
+        ctx.uiWorkspace?.selection?.getSnapshot(),
+        ctx.sessions.list.getSnapshot(),
+      );
       if (!sessionId) return;
       openThoughtComposer(anchor, bounds, selection, text => store.add(sessionId, selection, text));
     },

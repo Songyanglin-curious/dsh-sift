@@ -23,22 +23,21 @@ function profile(overrides: Partial<ProfileResult>): ProfileResult {
 
 describe('当前工作区推导', () => {
   it('列表未就绪时返回 undefined，而不是当作 default', () => {
-    expect(resolveCurrentWorkspace(undefined, { current: 'session-a', phase: 'ready' })).toBeUndefined();
-    expect(resolveCurrentWorkspace({ items: [], phase: 'pending' }, { current: 'session-a', phase: 'ready' })).toBeUndefined();
+    expect(resolveCurrentWorkspace(undefined, 'session-a')).toBeUndefined();
+    expect(resolveCurrentWorkspace({ items: [], phase: 'pending' }, 'session-a')).toBeUndefined();
     expect(resolveCurrentWorkspace(readyWorkspaces, undefined)).toBeUndefined();
-    expect(resolveCurrentWorkspace(readyWorkspaces, { phase: 'pending' })).toBeUndefined();
   });
 
   it('没有当前会话或会话不属于任何工作区时返回 undefined', () => {
-    expect(resolveCurrentWorkspace(readyWorkspaces, { phase: 'ready' })).toBeUndefined();
-    expect(resolveCurrentWorkspace(readyWorkspaces, { current: 'session-unknown', phase: 'ready' })).toBeUndefined();
-    expect(resolveCurrentWorkspace(readyWorkspaces, { current: 'session-b', phase: 'ready' })).toBeUndefined();
+    expect(resolveCurrentWorkspace(readyWorkspaces, undefined)).toBeUndefined();
+    expect(resolveCurrentWorkspace(readyWorkspaces, 'session-unknown')).toBeUndefined();
+    expect(resolveCurrentWorkspace(readyWorkspaces, 'session-b')).toBeUndefined();
   });
 
   it('由当前会话反查所属工作区', () => {
-    const snapshot: SessionSnapshot = { current: 'session-a', phase: 'ready' };
-    expect(resolveCurrentWorkspace(readyWorkspaces, snapshot)?.workspaceId).toBe('ws-a');
+    expect(resolveCurrentWorkspace(readyWorkspaces, 'session-a')?.workspaceId).toBe('ws-a');
   });
+
 });
 
 describe('Sift 界面启用条件', () => {

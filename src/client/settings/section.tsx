@@ -7,12 +7,16 @@ interface SettingsSnapshot<T> {
   readonly status: 'loading' | 'ready' | 'unavailable';
   readonly value?: T;
   readonly writable: boolean;
+  readonly base?: unknown;
+  readonly user?: unknown;
+  readonly revision?: number;
+  readonly mode?: 'host' | 'memory';
 }
 
 export interface SettingsScope<T> {
   getSnapshot(): SettingsSnapshot<T>;
   subscribe(listener: () => void): () => void;
-  mutate(ops: readonly ({ op: 'set'; path: string[]; value: unknown } | { op: 'unset'; path: string[] })[]): Promise<void>;
+  mutate(ops: readonly ({ op: 'set'; path: string[]; value: unknown } | { op: 'unset'; path: string[] })[]): Promise<boolean | void>;
 }
 
 interface ReasoningEffort { readonly id: string; readonly name: string; readonly description?: string }
@@ -110,7 +114,8 @@ export function SiftSettingsSection({ settings, loadModelCatalog }: SiftSettings
     setSaving(true);
     setError(undefined);
     try {
-      await settings.mutate(ops);
+      const accepted = await settings.mutate(ops);
+      if (accepted === false) throw new Error('设置未被 DSH 接受，请刷新后重试。');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {

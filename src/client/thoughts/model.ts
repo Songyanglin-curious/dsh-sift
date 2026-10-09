@@ -41,6 +41,14 @@ export interface ThoughtOccurrencePosition {
   readonly length: number;
 }
 
+/** DSH 0.2 将当前会话从 sessions.list.current 迁移到了 uiWorkspace.selection。 */
+export function resolveThoughtSessionId(
+  selection: { readonly sessionId?: string } | undefined,
+  legacySessions: { readonly current?: string } | undefined,
+): string | undefined {
+  return selection?.sessionId ?? legacySessions?.current;
+}
+
 /** DSH 编辑坐标中每个引用 chip 只占一个字符，draft/occurrence 则使用剪贴板文本坐标。 */
 export function detectEnd(draft: string, occurrences: readonly ThoughtOccurrencePosition[]): number {
   return draft.length - occurrences.reduce((hidden, occurrence) => hidden + occurrence.length - 1, 0);

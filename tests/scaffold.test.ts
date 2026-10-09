@@ -4,14 +4,15 @@ import { describe, expect, it, vi } from 'vitest';
 import { apply as applyClient, inject } from '../src/client/index.js';
 import { fitLayout } from '../src/client/dsh-adapter/layout.js';
 import { createLatestProfileReader } from '../src/client/dsh-adapter/workspace-entry.js';
-import { name, readWorkspaceProfile, SiftService, writeWorkspaceProfile } from '../src/host/index.js';
+import { Config, name, readWorkspaceProfile, SiftService, writeWorkspaceProfile } from '../src/host/index.js';
 
 const root = resolve(import.meta.dirname, '..');
 
 describe('Sift plugin scaffold', () => {
   it('exports the workspace-profile Host service', () => {
     expect(name).toBe('sift');
-    expect(SiftService.inject).toEqual(['workspaceRegistry', 'tools', 'settings', 'llm']);
+    expect(SiftService.inject).toEqual(['workspaceRegistry', 'tools', 'llm']);
+    expect(Object.values(Config.dict ?? {}).every(field => field.meta.volatile === true)).toBe(true);
   });
 
   it('registers one disposable Client workspace profile marker', async () => {
@@ -33,7 +34,7 @@ describe('Sift plugin scaffold', () => {
       effect,
       get: () => ({ getWorkspaceProfile: vi.fn() }),
     });
-    expect(inject).toEqual(['slots', 'workspaces', 'sessions', 'remote', 'remote.session', 'uiWorkspace', 'inputTriggers', 'settingsScope']);
+    expect(inject).toEqual(['slots', 'workspaces', 'sessions', 'remote', 'remote.session', 'uiWorkspace', 'inputTriggers', 'configForms']);
     expect(slots.inject).toHaveBeenCalledWith('sidebar.footer.action', expect.any(Function));
     expect(registrations.map((entry: any) => entry.options)).toEqual([
       { name: 'sidebar.footer.action', id: 'sift-workspace-profile', order: 90 },
@@ -69,6 +70,13 @@ describe('Sift plugin scaffold', () => {
     for (const descriptor of descriptors) {
       expect(descriptor.service).toBe('sift');
       expect(descriptor.namespace).toBe('sift');
+      for (const parameter of descriptor.parameters) {
+        if (parameter.codec.mode === 'strict') {
+          expect(typeof parameter.codec.create).toBe('function');
+          expect(typeof parameter.codec.create().parse).toBe('function');
+        }
+      }
+      if (descriptor.result.mode === 'strict') expect(typeof descriptor.result.create).toBe('function');
     }
   });
 });

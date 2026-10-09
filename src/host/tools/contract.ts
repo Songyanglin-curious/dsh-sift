@@ -2,7 +2,7 @@
  * Sift 注册 Agent 工具所需的最小契约复刻。
  *
  * 与 `dsh-adapter/input-trigger.ts` 同理：`@deepseek-ai/dsh-tools` 没有安装在本仓库，
- * 这里按 0.1.5-rc.2 复刻注册所需的形状。依据见
+ * 这里按 0.2.0-rc.2 复刻注册所需的形状。依据见
  * docs/dsh-tool-registration-api-research.md §1、§2、§3。
  *
  * 有两条容易写错的硬约束（已直接核对编译产物 dsh-tools/lib/index.js）：

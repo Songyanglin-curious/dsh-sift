@@ -17,9 +17,16 @@ export interface WorkspaceSnapshot {
 }
 
 export interface SessionSnapshot {
-  readonly current?: string;
   readonly phase?: 'pending' | 'ready';
-  readonly sessions?: readonly { readonly id: string }[];
+}
+
+export interface SessionSelectionSnapshot {
+  readonly sessionId?: string;
+}
+
+export interface SessionSelectionSource {
+  getSnapshot(): SessionSelectionSnapshot;
+  subscribe(listener: () => void): () => void;
 }
 
 export type WorkspaceProfile = 'default' | 'sift';
@@ -33,18 +40,17 @@ export interface ProfileResult {
 }
 
 /**
- * DSH 没有独立的「当前工作区」读取源，只能由当前会话反查所属工作区。
+ * DSH 0.2 的会话列表不再携带 current；当前会话由 session-scoped 插槽提供。
+ * 这里只用插槽给出的会话 ID 反查所属工作区。
  * 列表未就绪时返回 undefined，调用方必须当作「还不知道」而不是「是 default」。
  */
 export function resolveCurrentWorkspace(
   workspaces: WorkspaceSnapshot | undefined,
-  sessions: SessionSnapshot | undefined,
+  currentSessionId: string | undefined,
 ): WorkspaceView | undefined {
   if (!workspaces || workspaces.phase !== 'ready') return undefined;
-  if (!sessions || sessions.phase === 'pending') return undefined;
-  const currentId = sessions.current;
-  if (currentId === undefined) return undefined;
-  return workspaces.items.find(item => item.sessionIds.includes(currentId));
+  if (currentSessionId === undefined) return undefined;
+  return workspaces.items.find(item => item.sessionIds.includes(currentSessionId));
 }
 
 /** 只有配置合法且为 sift 时才启用 Sift 界面；缺失或损坏都回落到原生体验。 */

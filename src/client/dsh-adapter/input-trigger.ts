@@ -5,7 +5,7 @@
  * DSH 升级后只需重新核对本文件，业务代码（reference/source.ts 等）不受影响。
  *
  * 契约来源：`@deepseek-ai/dsh-client-ui-input-trigger/client` 的公开再导出
- * （该包未安装在本仓库，故此处按 0.1.5-rc.2 逐字复刻所需子集）。
+ * （该包未安装在本仓库，故此处按 0.2.0-rc.2 逐字复刻所需子集）。
  * 依据见 docs/dsh-reference-api-research.md 第 1、2、3 节，含 path:line 引用。
  */
 

@@ -73,12 +73,12 @@ AI 提出修改建议
 
 ## 安装
 
-当前发布版只适配 DSH `0.1.5-rc.2`，需要 Node.js 24 或更高版本。建议使用独立的 `sift` Profile，避免影响日常使用的其他 DSH Profile。
+当前版本适配 DSH `0.2.0-rc.2`，需要 Node.js 24 或更高版本。建议使用独立的 `sift` Profile，避免影响日常使用的其他 DSH Profile。
 
 首次创建 Profile 时，先安装同版本的 Web 应用：
 
 ```powershell
-dsh plugin --profile sift add @deepseek-ai/dsh-web-app@0.1.5-rc.2
+dsh plugin --profile sift add @deepseek-ai/dsh-web-app@0.2.0-rc.2
 ```
 
 Sift 使用 `koffi` 访问 Windows 原生能力。安装前确认 `%USERPROFILE%\.dsh\profiles\sift\pnpm-workspace.yaml` 允许构建：
@@ -107,13 +107,13 @@ dsh plugin --profile sift update @songyanglin/dsh-sift
 dsh plugin --profile sift remove @songyanglin/dsh-sift
 ```
 
-Sift `0.1.5-rc.2` 与 DSH `0.1.5-rc.2` 对应；适配新的 DSH 版本时，Sift 会同步发布新的对应版本。
+Sift `0.2.0-rc.2` 与 DSH `0.2.0-rc.2` 对应；适配新的 DSH 版本时，Sift 会同步发布新的对应版本。
 
 ## 本地开发
 
 当前开发环境要求：
 
-* DSH `0.1.5-rc.2`
+* DSH `0.2.0-rc.2`
 * Node.js 24 或更高版本
 * pnpm `11.25.0`
 

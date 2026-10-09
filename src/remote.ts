@@ -29,13 +29,13 @@ export const descriptors: TypertRemoteContribution['descriptors'][number][] = [{
       codec: {
         mode: 'strict',
         typeSymbol: '@songyanglin/dsh-sift#WorkspaceProfileRequest',
-        schema: z.object({ workspaceId: z.string() }).readonly(),
+        create: () => z.object({ workspaceId: z.string() }).readonly(),
       },
     }],
     result: {
       mode: 'strict',
       typeSymbol: '@songyanglin/dsh-sift#WorkspaceProfileResult',
-      schema: profileSchema,
+      create: () => profileSchema,
     },
   }, {
     id: '@songyanglin/dsh-sift#sift/setWorkspaceProfile',
@@ -49,10 +49,10 @@ export const descriptors: TypertRemoteContribution['descriptors'][number][] = [{
       codec: {
         mode: 'strict',
         typeSymbol: '@songyanglin/dsh-sift#SetWorkspaceProfileRequest',
-        schema: z.object({ workspaceId: z.string(), profile: z.union([z.literal('default'), z.literal('sift')]) }).readonly(),
+        create: () => z.object({ workspaceId: z.string(), profile: z.union([z.literal('default'), z.literal('sift')]) }).readonly(),
       },
     }],
-    result: { mode: 'strict', typeSymbol: '@songyanglin/dsh-sift#WorkspaceProfileResult', schema: profileSchema },
+    result: { mode: 'strict', typeSymbol: '@songyanglin/dsh-sift#WorkspaceProfileResult', create: () => profileSchema },
   }];
 
 for (const [method, input, output] of [
@@ -63,8 +63,8 @@ for (const [method, input, output] of [
   ['readMaterial', z.object({ workspaceId: z.string(), id: z.string() }), z.object({ base64: z.string() })],
 ] as const) {
   descriptors.push({ id: `${PACKAGE}#sift/${method}`, service: 'sift', namespace: 'sift', method, implementation: method,
-    invocation: { kind: 'direct' }, parameters: [{ name: 'input', wire: 'input', source: 'json', codec: { mode: 'strict', typeSymbol: `${PACKAGE}#${method}Request`, schema: input } }],
-    result: { mode: 'strict', typeSymbol: `${PACKAGE}#${method}Result`, schema: output },
+    invocation: { kind: 'direct' }, parameters: [{ name: 'input', wire: 'input', source: 'json', codec: { mode: 'strict', typeSymbol: `${PACKAGE}#${method}Request`, create: () => input } }],
+    result: { mode: 'strict', typeSymbol: `${PACKAGE}#${method}Result`, create: () => output },
   });
 }
 
@@ -79,8 +79,8 @@ for (const [method, input, output] of [
   ['removeDocument', z.object({ workspaceId: z.string(), documentId: z.string() }), documentIndexSchema],
 ] as const) {
   descriptors.push({ id: `${PACKAGE}#sift/${method}`, service: 'sift', namespace: 'sift', method, implementation: method,
-    invocation: { kind: 'direct' }, parameters: [{ name: 'input', wire: 'input', source: 'json', codec: { mode: 'strict', typeSymbol: `${PACKAGE}#${method}Request`, schema: input } }],
-    result: { mode: 'strict', typeSymbol: `${PACKAGE}#${method}Result`, schema: output },
+    invocation: { kind: 'direct' }, parameters: [{ name: 'input', wire: 'input', source: 'json', codec: { mode: 'strict', typeSymbol: `${PACKAGE}#${method}Request`, create: () => input } }],
+    result: { mode: 'strict', typeSymbol: `${PACKAGE}#${method}Result`, create: () => output },
   });
 }
 
@@ -109,14 +109,14 @@ for (const [method, input, output] of [
   ['browseExternal', z.object({ path: z.string() }), entriesSchema],
 ] as const) {
   descriptors.push({ id: `${PACKAGE}#sift/${method}`, service: 'sift', namespace: 'sift', method, implementation: method,
-    invocation: { kind: 'direct' }, parameters: [{ name: 'input', wire: 'input', source: 'json', codec: { mode: 'strict', typeSymbol: `${PACKAGE}#${method}Request`, schema: input } }],
-    result: { mode: 'strict', typeSymbol: `${PACKAGE}#${method}Result`, schema: output },
+    invocation: { kind: 'direct' }, parameters: [{ name: 'input', wire: 'input', source: 'json', codec: { mode: 'strict', typeSymbol: `${PACKAGE}#${method}Request`, create: () => input } }],
+    result: { mode: 'strict', typeSymbol: `${PACKAGE}#${method}Result`, create: () => output },
   });
 }
 
 descriptors.push({ id: `${PACKAGE}#sift/readClipboard`, service: 'sift', namespace: 'sift', method: 'readClipboard', implementation: 'readClipboard',
-  invocation: { kind: 'direct' }, parameters: [{ name: 'input', wire: 'input', source: 'json', codec: { mode: 'strict', typeSymbol: `${PACKAGE}#readClipboardRequest`, schema: z.object({}).readonly() } }],
-  result: { mode: 'strict', typeSymbol: `${PACKAGE}#readClipboardResult`, schema: clipboardSnapshotSchema },
+  invocation: { kind: 'direct' }, parameters: [{ name: 'input', wire: 'input', source: 'json', codec: { mode: 'strict', typeSymbol: `${PACKAGE}#readClipboardRequest`, create: () => z.object({}).readonly() } }],
+  result: { mode: 'strict', typeSymbol: `${PACKAGE}#readClipboardResult`, create: () => clipboardSnapshotSchema },
 });
 
 const referenceSummaryArraySchema = z.array(referenceSummarySchema).readonly();
@@ -135,8 +135,8 @@ for (const [method, input, output] of [
   ['openSourcePath', z.object({ path: z.string() }), z.object({})],
 ] as const) {
   descriptors.push({ id: `${PACKAGE}#sift/${method}`, service: 'sift', namespace: 'sift', method, implementation: method,
-    invocation: { kind: 'direct' }, parameters: [{ name: 'input', wire: 'input', source: 'json', codec: { mode: 'strict', typeSymbol: `${PACKAGE}#${method}Request`, schema: input } }],
-    result: { mode: 'strict', typeSymbol: `${PACKAGE}#${method}Result`, schema: output },
+    invocation: { kind: 'direct' }, parameters: [{ name: 'input', wire: 'input', source: 'json', codec: { mode: 'strict', typeSymbol: `${PACKAGE}#${method}Request`, create: () => input } }],
+    result: { mode: 'strict', typeSymbol: `${PACKAGE}#${method}Result`, create: () => output },
   });
 }
 
