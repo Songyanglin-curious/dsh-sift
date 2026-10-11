@@ -1,7 +1,7 @@
 {
   "name": "@songyanglin/dsh-sift",
   "description": "由 AI 协作的个人学习型知识梳理工作台",
-  "version": "0.2.0-rc.2",
+  "version": "0.2.1",
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"

@@ -107,7 +107,7 @@ dsh plugin --profile sift update @songyanglin/dsh-sift
 dsh plugin --profile sift remove @songyanglin/dsh-sift
 ```
 
-Sift `0.2.0-rc.2` 与 DSH `0.2.0-rc.2` 对应；适配新的 DSH 版本时，Sift 会同步发布新的对应版本。
+Sift 使用独立版本号管理发布历史；当前 `0.2.1` 适配 DSH `0.2.0-rc.2`。DSH 兼容范围以 `peerDependencies` 为准，不要求两者版本号一致。
 
 ## 本地开发
 
