@@ -73,6 +73,8 @@ AI 提出修改建议
 
 ## 安装
 
+“本轮批注”已经拆分为独立的通用插件 `@songyanglin/dsh-annotations`。Sift 不再内置批注 UI；需要在 Reference、Document 或普通 DSH 对话中使用批注时，将两者安装到同一个 Profile。未安装 Annotations 不影响 Sift 的其他功能。
+
 当前版本适配 DSH `0.2.0-rc.2`，需要 Node.js 24 或更高版本。建议使用独立的 `sift` Profile，避免影响日常使用的其他 DSH Profile。
 
 首次创建 Profile 时，先安装同版本的 Web 应用：
@@ -92,6 +94,7 @@ allowBuilds:
 
 ```powershell
 dsh plugin --profile sift add @songyanglin/dsh-sift@rc
+dsh plugin --profile sift add @songyanglin/dsh-annotations
 ```
 
 启动该 Profile：

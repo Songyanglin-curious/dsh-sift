@@ -9,8 +9,7 @@ import { mountDocumentEditor } from './document-editor.js';
 import { mountReferencePanel } from './reference/panel.js';
 import { triggerRefSelector } from './reference/ref-selector.js';
 import { WorkspaceController } from './workspace-controller.js';
-import { installThoughtFeature, type ThoughtFeatureHost } from './thoughts/index.js';
-import { type InputTriggerServiceContract } from './dsh-adapter/input-trigger.js';
+import { installAnnotationAdapter } from './annotations/adapter.js';
 import { unwrapRemoteResult } from './dsh-adapter/remote-result.js';
 import { mountThreeColumn, type ColumnSpec } from './dsh-adapter/layout.js';
 import { findConversationCenter } from './dsh-adapter/selectors.js';
@@ -73,7 +72,6 @@ interface ClientContext {
         /** DSH 0.2 Workspace 导航使用的当前主会话快照。 */
         selection?: SessionSelectionSource;
     }
-    inputTriggers?: InputTriggerServiceContract
     remote: {
         $mount(contribution: typeof TYPERT_REMOTE): Promise<() => void | Promise<void>>;
         sift?: SiftRemote;
@@ -138,7 +136,7 @@ function WorkspaceProfileBadge({ ctx, selection }: { ctx: ClientContext; selecti
 import { installWorkspaceTypeCreator } from './workspace-creator.js';
 export { installWorkspaceTypeCreator };
 
-export const inject = ['slots', 'workspaces', 'sessions', 'remote', 'remote.session', 'uiWorkspace', 'inputTriggers', 'configForms'];
+export const inject = ['slots', 'workspaces', 'sessions', 'remote', 'remote.session', 'uiWorkspace', 'configForms'];
 
 export function apply(ctx: ClientContext): void {
     const selection = ctx.uiWorkspace?.selection;
@@ -200,9 +198,8 @@ export function apply(ctx: ClientContext): void {
 
     const disposeCreator = installWorkspaceTypeCreator(ctx, input => remoteContext.remote.sift!.setWorkspaceProfile(input));
     ctx.effect?.(() => disposeCreator, 'sift: workspace type creator');
-    const thoughts = ctx.inputTriggers && ctx.sessions
-        ? installThoughtFeature(ctx as unknown as ThoughtFeatureHost)
-        : undefined;
+    const disposeAnnotations = installAnnotationAdapter();
+    ctx.effect?.(() => disposeAnnotations, 'sift: annotations adapter');
 
     let generation = 0;
     let mountedCenter: HTMLElement | null = null;
@@ -259,7 +256,6 @@ export function apply(ctx: ClientContext): void {
                             },
                             readClipboard: () => remoteContext.remote.sift!.readClipboard({}),
                             workspace: workspaceController,
-                            thoughts,
                         });
                         return () => disposePanel();
                     } catch (error) {
@@ -275,7 +271,6 @@ export function apply(ctx: ClientContext): void {
                     pickDirectory: () => ctx.uiWorkspace?.pickDirectory() ?? Promise.resolve(null),
                     pickOutputFiles: () => remoteContext.remote.sift!.pickSourceFiles({}),
                     workspace: workspaceController,
-                    thoughts,
                     openDocumentPath: path => remoteContext.remote.sift!.openSourcePath({ path }).then(() => undefined),
                     setActiveDocument: documentId => remoteContext.remote.sift!.setActiveDocument({ workspaceId: workspace.workspaceId, ...(documentId === undefined ? {} : { documentId }) }).then(() => undefined),
                     editRelations: () => {

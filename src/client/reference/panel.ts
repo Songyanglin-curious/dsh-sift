@@ -23,7 +23,6 @@ import type { ReferenceCardData } from '../renderer/card.js';
 import type { ClipboardSnapshot } from '../../host/clipboard/index.js';
 import type { ReferenceDocument, ReferenceSummary } from '../../references.js';
 import type { WorkspaceController } from '../workspace-controller.js';
-import { installSelectionCapture, type ThoughtFeature } from '../thoughts/index.js';
 import { mountConversationView } from './conversation-view.js';
 import type { CardReferenceDocument } from '../../references.js';
 
@@ -49,7 +48,6 @@ export interface ReferencePanelOptions {
   /** 测试可替换；生产默认使用浏览器原生二次确认。 */
   readonly confirmDelete?: (name: string) => boolean;
   readonly workspace?: WorkspaceController;
-  readonly thoughts?: ThoughtFeature;
 }
 
 const SAVE_DEBOUNCE_MS = 400;
@@ -476,6 +474,13 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
       }
     }
     updateSelectionVisibility();
+    if (currentDoc && currentPath) {
+      panel.dataset.annotationUri = currentPath;
+      panel.dataset.annotationTitle = currentDoc.name;
+    } else {
+      delete panel.dataset.annotationUri;
+      delete panel.dataset.annotationTitle;
+    }
     canvasApi.refresh();
     renderTabs();
     if (publishSelection) options.workspace?.setActiveReference(currentPath ?? undefined);
@@ -520,23 +525,6 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
   panel.append(tabBar, canvasHost, conversationHost, emptyState);
   section.append(panel);
   updateSelectionVisibility();
-
-  const disposeThoughtSelection = options.thoughts
-    ? installSelectionCapture(panel, 'reference', target => {
-        if (!currentDoc || !currentPath) return undefined;
-        const element = target instanceof Element ? target : target.parentElement;
-        const card = element?.closest<HTMLElement>('[data-sift-card]');
-        const conversationGroup = element?.closest<HTMLElement>('[data-sift-conversation-group]');
-        const sourceElement = card ?? conversationGroup;
-        if (!sourceElement || !panel.contains(sourceElement)) return undefined;
-        return {
-          sourceId: card
-            ? `${currentPath}#${card.dataset.cardId ?? 'card'}`
-            : `${currentPath}#${conversationGroup?.dataset.siftConversationGroup ?? 'conversation'}`,
-          sourceName: currentDoc.name,
-        };
-      }, options.thoughts.capture)
-    : undefined;
 
   // layout.ts 创建的 section header（Reference Board / 当前有效参考）不再显示标题文字，
   // 引用管理的入口已移到 tab bar。
@@ -622,7 +610,6 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
   return () => {
     document.removeEventListener('keydown', onKeydown);
     disposeWorkspace?.();
-    disposeThoughtSelection?.();
     disposeConversationView?.();
     void persistNow(); // 尽力而为：dispose 前把挂起的修改写掉
     canvasApi.dispose();

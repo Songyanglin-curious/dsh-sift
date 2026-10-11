@@ -34,7 +34,7 @@ describe('Sift plugin scaffold', () => {
       effect,
       get: () => ({ getWorkspaceProfile: vi.fn() }),
     });
-    expect(inject).toEqual(['slots', 'workspaces', 'sessions', 'remote', 'remote.session', 'uiWorkspace', 'inputTriggers', 'configForms']);
+    expect(inject).toEqual(['slots', 'workspaces', 'sessions', 'remote', 'remote.session', 'uiWorkspace', 'configForms']);
     expect(slots.inject).toHaveBeenCalledWith('sidebar.footer.action', expect.any(Function));
     expect(registrations.map((entry: any) => entry.options)).toEqual([
       { name: 'sidebar.footer.action', id: 'sift-workspace-profile', order: 90 },

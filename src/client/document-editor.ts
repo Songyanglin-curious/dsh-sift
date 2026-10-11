@@ -1,7 +1,6 @@
 import documentEditorCss from './document-editor.css?inline';
 import { DOCUMENT_DIRECTORY, type DocumentsApi, type SiftDocument } from '../documents.js';
 import { mountMarkdownView } from './markdown-view.js';
-import { installSelectionCapture, type ThoughtFeature } from './thoughts/index.js';
 import type { WorkspaceController } from './workspace-controller.js';
 import { setIcon } from './icons.js';
 
@@ -13,7 +12,6 @@ export interface DocumentEditorOptions {
   readonly pickOutputFiles?: () => Promise<{ paths: readonly string[]; cancelled: boolean; message?: string }>;
   readonly confirmDelete?: (name: string) => boolean;
   readonly workspace?: WorkspaceController;
-  readonly thoughts?: ThoughtFeature;
   readonly editRelations?: () => void | Promise<void>;
   readonly openDocumentPath?: (path: string) => Promise<void>;
   readonly setActiveDocument?: (documentId?: string) => Promise<void>;
@@ -71,6 +69,8 @@ export function mountDocumentEditor(section: HTMLElement, options: DocumentEdito
     try {
       const result = await api.readDocumentContent({ workspaceId, documentId: current.id });
       activePath = result.path;
+      root.dataset.annotationUri = result.path;
+      root.dataset.annotationTitle = titleOf(current);
       if (result.content !== lastLoadedContent) showMarkdown(result.content);
       lastLoadedContent = result.content; if (announce) setStatus('已同步'); render();
     } catch (error) { setStatus(`同步失败：${error instanceof Error ? error.message : String(error)}`, true); }
@@ -80,6 +80,7 @@ export function mountDocumentEditor(section: HTMLElement, options: DocumentEdito
     activeId = id; options.workspace?.setOutputTabs(documents.map(item => item.id));
     await options.workspace?.setActiveOutput(id); await options.setActiveDocument?.(id);
     activePath = undefined; lastLoadedContent = undefined; render();
+    if (!id) { delete root.dataset.annotationUri; delete root.dataset.annotationTitle; }
     if (id) await sync(false);
   };
   const iconButton = (dataName: string, title: string, icon?: 'plus' | 'list-plus' | 'pencil' | 'close' | 'trash') => {
@@ -158,9 +159,8 @@ export function mountDocumentEditor(section: HTMLElement, options: DocumentEdito
   const focusSync = () => { if (!document.hidden && activeId) void sync(false); };
   window.addEventListener('focus', focusSync); document.addEventListener('visibilitychange', focusSync);
   const syncTimer = window.setInterval(focusSync, 2000);
-  const disposeSelection = options.thoughts ? installSelectionCapture(root, 'output', () => active() ? { sourceId: active()!.id, sourceName: titleOf(active()!) } : undefined, options.thoughts.capture) : undefined;
   void api.listDocuments({ workspaceId }).then(async index => { if (!disposed) { documents = [...index.documents]; await activate(documents[0]?.id); } }, error => setStatus(`读取 Document 失败：${String(error)}`, true));
   return () => {
-    disposed = true; disposeMarkdown?.(); disposeSelection?.(); window.clearInterval(syncTimer); window.removeEventListener('focus', focusSync); document.removeEventListener('visibilitychange', focusSync); void options.setActiveDocument?.(undefined);
+    disposed = true; disposeMarkdown?.(); window.clearInterval(syncTimer); window.removeEventListener('focus', focusSync); document.removeEventListener('visibilitychange', focusSync); void options.setActiveDocument?.(undefined);
   };
 }
