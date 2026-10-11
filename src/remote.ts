@@ -5,55 +5,9 @@ import { documentIndexSchema, siftDocumentSchema } from './documents.js';
 import { sourceIndexSchema, sourceSchema } from './sources.js';
 import { referenceDocumentSchema, relationLookupSchema, referenceSummarySchema } from './references.js';
 
-const profileSchema = z.object({
-  workspaceId: z.string(),
-  title: z.string(),
-  profile: z.union([z.literal('default'), z.literal('sift')]),
-  status: z.union([z.literal('ready'), z.literal('missing'), z.literal('invalid')]),
-  message: z.string().optional(),
-}).readonly();
-
 export const PACKAGE = '@songyanglin/dsh-sift';
 
-export const descriptors: TypertRemoteContribution['descriptors'][number][] = [{
-    id: '@songyanglin/dsh-sift#sift/getWorkspaceProfile',
-    service: 'sift',
-    namespace: 'sift',
-    method: 'getWorkspaceProfile',
-    implementation: 'getWorkspaceProfile',
-    invocation: { kind: 'direct' },
-    parameters: [{
-      name: 'input',
-      wire: 'input',
-      source: 'json',
-      codec: {
-        mode: 'strict',
-        typeSymbol: '@songyanglin/dsh-sift#WorkspaceProfileRequest',
-        create: () => z.object({ workspaceId: z.string() }).readonly(),
-      },
-    }],
-    result: {
-      mode: 'strict',
-      typeSymbol: '@songyanglin/dsh-sift#WorkspaceProfileResult',
-      create: () => profileSchema,
-    },
-  }, {
-    id: '@songyanglin/dsh-sift#sift/setWorkspaceProfile',
-    service: 'sift',
-    namespace: 'sift',
-    method: 'setWorkspaceProfile',
-    implementation: 'setWorkspaceProfile',
-    invocation: { kind: 'direct' },
-    parameters: [{
-      name: 'input', wire: 'input', source: 'json',
-      codec: {
-        mode: 'strict',
-        typeSymbol: '@songyanglin/dsh-sift#SetWorkspaceProfileRequest',
-        create: () => z.object({ workspaceId: z.string(), profile: z.union([z.literal('default'), z.literal('sift')]) }).readonly(),
-      },
-    }],
-    result: { mode: 'strict', typeSymbol: '@songyanglin/dsh-sift#WorkspaceProfileResult', create: () => profileSchema },
-  }];
+export const descriptors: TypertRemoteContribution['descriptors'][number][] = [];
 
 for (const [method, input, output] of [
   ['getMaterials', z.object({ workspaceId: z.string() }), materialsSchema],
@@ -73,7 +27,6 @@ for (const [method, input, output] of [
   ['saveDocument', z.object({ workspaceId: z.string(), documentId: z.string(), title: z.string().optional(), content: z.string(), targetDirectory: z.string().optional() }),
     z.object({ index: documentIndexSchema, document: siftDocumentSchema, created: z.boolean() })],
   ['readDocumentContent', z.object({ workspaceId: z.string(), documentId: z.string() }), z.object({ content: z.string(), path: z.string() })],
-  ['setActiveDocument', z.object({ workspaceId: z.string(), documentId: z.string().optional() }), z.object({})],
   ['addExistingDocument', z.object({ workspaceId: z.string(), documentId: z.string(), path: z.string() }), z.object({ index: documentIndexSchema, document: siftDocumentSchema, added: z.boolean() })],
   ['detachDocument', z.object({ workspaceId: z.string(), documentId: z.string() }), documentIndexSchema],
   ['removeDocument', z.object({ workspaceId: z.string(), documentId: z.string() }), documentIndexSchema],
@@ -130,8 +83,8 @@ for (const [method, input, output] of [
   ['analyzeConversation', z.object({ workspaceId: z.string(), path: z.string(), anchorGroupId: z.string() }), referenceDocumentSchema],
   ['analyzeConversationTopic', z.object({ workspaceId: z.string(), path: z.string(), topic: z.string() }), referenceDocumentSchema],
   ['removeReference', z.object({ workspaceId: z.string(), path: z.string() }), z.object({})],
-  ['getDocumentRelations', z.object({ workspaceId: z.string(), target: z.string() }), relationLookupSchema],
-  ['setDocumentRelations', z.object({ workspaceId: z.string(), target: z.string(), references: z.array(z.string()) }), z.object({})],
+  ['getArticleRelations', z.object({ workspaceId: z.string(), target: z.string() }), relationLookupSchema],
+  ['setArticleRelations', z.object({ workspaceId: z.string(), target: z.string(), references: z.array(z.string()) }), z.object({})],
   ['openSourcePath', z.object({ path: z.string() }), z.object({})],
 ] as const) {
   descriptors.push({ id: `${PACKAGE}#sift/${method}`, service: 'sift', namespace: 'sift', method, implementation: method,

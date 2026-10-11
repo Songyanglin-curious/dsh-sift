@@ -122,7 +122,7 @@ export const referenceSummarySchema = z.object({
 });
 export type ReferenceSummary = z.infer<typeof referenceSummarySchema>;
 
-/** relations.json 的一条：某个稳定 Document id 使用了哪些 Reference。 */
+/** relations.json 的一条：某篇文章（文件路径或旧 Document id）使用了哪些 Reference。 */
 export const relationEntrySchema = z.object({
   target: z.string(),
   references: z.array(z.string()),

@@ -190,9 +190,12 @@ describe('RelationStore', () => {
     expect(raw.relations.map(item => item.target)).toEqual(['doc-stable']);
   });
 
-  it('拒绝非法 target', async () => {
-    await expect(setDocumentRelations(root, '../outside.md', [])).rejects.toThrow('非法');
-    await expect(getDocumentRelations(root, 'C:\\abs\\path.md')).rejects.toThrow('非法');
+  it('接受文章路径并拒绝空值或控制字符', async () => {
+    const reference = await createReference(root, '文章参考');
+    await setDocumentRelations(root, 'C:\\notes\\article.md', [reference]);
+    expect(await getDocumentRelations(root, 'C:\\notes\\article.md')).toEqual({ exists: true, references: [reference] });
+    await expect(setDocumentRelations(root, '  ', [])).rejects.toThrow('非法');
+    await expect(getDocumentRelations(root, 'bad\u0000key')).rejects.toThrow('非法');
   });
 
   it('relations.json 里引用不存在的 Reference 不报错（读取方容错）', async () => {

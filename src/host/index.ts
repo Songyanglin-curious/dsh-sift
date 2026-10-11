@@ -1,11 +1,10 @@
 import type { Context } from '@deepseek-ai/cordis';
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
 import Schema from '@deepseek-ai/schemastery';
-import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { readMaterials, listMaterialFiles, mutateMaterials, readMaterial } from './materials.js';
-import { createDocumentChangeTool } from './document/change-tool.js';
 import {
   readDocumentIndex,
   readDocumentText,
@@ -40,21 +39,11 @@ import {
 } from './reference/store.js';
 import { isConversationReference, type ReferenceDocument } from '../references.js';
 import { analyzeConversation, analyzeConversationTopic, type ConversationAnalysisTiming } from './conversation/analyzer.js';
-import type { ToolRuntimeContract } from './tools/contract.js';
 import {
   type ConversationAnalysisSettings,
 } from '../settings.js';
 
 export const name = 'sift';
-
-export type WorkspaceProfile = 'default' | 'sift';
-export interface WorkspaceProfileResult {
-  readonly workspaceId: string;
-  readonly title: string;
-  readonly profile: WorkspaceProfile;
-  readonly status: 'ready' | 'missing' | 'invalid';
-  readonly message?: string;
-}
 
 interface WorkspaceRecord {
   readonly id: string;
@@ -66,45 +55,7 @@ interface WorkspaceRegistry {
   get(id: string): WorkspaceRecord | undefined;
 }
 
-interface SiftContext extends Context {
-  workspaceRegistry: WorkspaceRegistry;
-  tools: ToolRuntimeContract;
-}
-
-export async function readWorkspaceProfile(workspace: WorkspaceRecord): Promise<WorkspaceProfileResult> {
-  const base = { workspaceId: workspace.id, title: workspace.title };
-  try {
-    const raw = await readFile(resolve(workspace.path, '.sift', 'config.json'), 'utf8');
-    const value: unknown = JSON.parse(raw);
-    if (!isProfileConfig(value)) {
-      return { ...base, profile: 'default', status: 'invalid', message: 'Sift 配置格式或版本不受支持。' };
-    }
-    return { ...base, profile: value.profile, status: 'ready' };
-  } catch (error) {
-    if (isMissingFile(error)) return { ...base, profile: 'default', status: 'missing' };
-    return { ...base, profile: 'default', status: 'invalid', message: 'Sift 配置损坏，已使用 default。' };
-  }
-}
-
-export async function writeWorkspaceProfile(workspace: WorkspaceRecord, profile: WorkspaceProfile): Promise<WorkspaceProfileResult> {
-  const directory = resolve(workspace.path, '.sift');
-  const target = resolve(directory, 'config.json');
-  const temporary = resolve(directory, `config.json.${process.pid}.tmp`);
-  await mkdir(directory, { recursive: true });
-  await writeFile(temporary, `${JSON.stringify({ schemaVersion: 1, profile }, null, 2)}\n`, 'utf8');
-  await rename(temporary, target);
-  return { workspaceId: workspace.id, title: workspace.title, profile, status: 'ready' };
-}
-
-function isProfileConfig(value: unknown): value is { schemaVersion: 1; profile: WorkspaceProfile } {
-  return typeof value === 'object' && value !== null
-    && (value as Record<string, unknown>).schemaVersion === 1
-    && ((value as Record<string, unknown>).profile === 'default' || (value as Record<string, unknown>).profile === 'sift');
-}
-
-function isMissingFile(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && (error as NodeJS.ErrnoException).code === 'ENOENT';
-}
+interface SiftContext extends Context { workspaceRegistry: WorkspaceRegistry }
 
 /** 插件配置（写在 cordis.patch.yml 的 sift 行 config 段）。 */
 export const Config = Schema.object({
@@ -120,7 +71,7 @@ export const Config = Schema.object({
 export type SiftConfig = ReturnType<typeof Config>;
 
 export class SiftService extends TypertRemoteService {
-  static inject = ['workspaceRegistry', 'tools', 'llm'];
+  static inject = ['workspaceRegistry', 'llm'];
   static Config = Config;
   private readonly registry: WorkspaceRegistry;
   private readonly config: SiftConfig;
@@ -161,8 +112,6 @@ export class SiftService extends TypertRemoteService {
     };
     return { timing, flush: () => writes };
   }
-  /** 当前界面明确绑定的唯一 AI 可写 Document。 */
-  private activeDocument?: { workspaceId: string; documentId: string };
   private workspacePath(id: string): string {
     const workspace = this.registry.get(id);
     if (!workspace) throw new Error('工作区不存在。');
@@ -209,18 +158,6 @@ export class SiftService extends TypertRemoteService {
   }
 
   @Remote
-  async setActiveDocument(input: { workspaceId: string; documentId?: string }) {
-    if (input.documentId === undefined) {
-      if (this.activeDocument?.workspaceId === input.workspaceId) this.activeDocument = undefined;
-      return {};
-    }
-    const root = this.workspacePath(input.workspaceId);
-    const index = await readDocumentIndex(root);
-    if (!index.documents.some(item => item.id === input.documentId && item.path)) throw new Error('当前 Document 不存在或尚未保存。');
-    this.activeDocument = { workspaceId: input.workspaceId, documentId: input.documentId };
-    return {};
-  }
-
   @Remote
   async addExistingDocument(input: { workspaceId: string; documentId: string; path: string }) {
     return addExistingDocumentFile(this.workspacePath(input.workspaceId), { id: input.documentId, path: input.path });
@@ -426,13 +363,13 @@ export class SiftService extends TypertRemoteService {
   }
 
   @Remote
-  async getDocumentRelations(input: { workspaceId: string; target: string }) {
+  async getArticleRelations(input: { workspaceId: string; target: string }) {
     const root = this.workspacePath(input.workspaceId);
     return readDocumentRelations(root, input.target);
   }
 
   @Remote
-  async setDocumentRelations(input: { workspaceId: string; target: string; references: string[] }) {
+  async setArticleRelations(input: { workspaceId: string; target: string; references: string[] }) {
     await writeDocumentRelations(this.workspacePath(input.workspaceId), input.target, input.references);
     return {};
   }
@@ -454,45 +391,10 @@ export class SiftService extends TypertRemoteService {
     this.config = config;
     this.llm = ctx.llm;
     this.logger = ctx.logger;
-    ctx.tools.register(createDocumentChangeTool(
-      async () => {
-        const active = this.activeDocument;
-        if (!active) throw new Error('Sift 当前没有打开可修改的 Document。');
-        const root = this.workspacePath(active.workspaceId);
-        const index = await readDocumentIndex(root);
-        const document = index.documents.find(item => item.id === active.documentId);
-        if (!document?.path) throw new Error('当前 Document 不存在或尚未保存。');
-        return { ...active, path: document.path };
-      },
-      async (target, content) => {
-        const root = this.workspacePath(target.workspaceId);
-        const index = await readDocumentIndex(root);
-        const document = index.documents.find(item => item.id === target.documentId);
-        if (!document?.path || document.path !== target.path) throw new Error('当前 Document 已发生变化，请重新打开后再试。');
-        await saveDocumentFile(root, { id: document.id, ...(document.title === undefined ? {} : { title: document.title }), content });
-      },
-    ));
     ctx.logger.info('Sift 插件已加载。');
     ctx.effect(() => () => ctx.logger.info('Sift 插件已卸载。'));
   }
 
-  @Remote
-  async getWorkspaceProfile(input: { workspaceId: string }): Promise<WorkspaceProfileResult> {
-    const workspace = this.registry.get(input.workspaceId);
-    if (!workspace) {
-      return { workspaceId: input.workspaceId, title: '', profile: 'default', status: 'invalid', message: '当前工作区已不存在。' };
-    }
-    return readWorkspaceProfile(workspace);
-  }
-
-  @Remote
-  async setWorkspaceProfile(input: { workspaceId: string; profile: WorkspaceProfile }): Promise<WorkspaceProfileResult> {
-    const workspace = this.registry.get(input.workspaceId);
-    if (!workspace) {
-      return { workspaceId: input.workspaceId, title: '', profile: 'default', status: 'invalid', message: '刚创建的工作区已不存在。' };
-    }
-    return writeWorkspaceProfile(workspace, input.profile);
-  }
 }
 
 export default SiftService;

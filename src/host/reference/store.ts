@@ -51,10 +51,10 @@ function resolveReferencePath(root: string, path: string): string {
   return target;
 }
 
-/** 新关系统一使用稳定 Document id；兼容读取时仍可迁移旧路径 target。 */
+/** 关系主键可以是旧 Document id，也可以是当前文章的绝对路径或资源地址。 */
 function assertSafeRelationTarget(target: string): void {
-  if (target.trim() === '' || target.includes('/') || target.includes('\\')) {
-    throw new Error(`非法的 Document id：${target}`);
+  if (target.trim() === '' || target.length > 4096 || /[\u0000-\u001f]/.test(target)) {
+    throw new Error(`非法的文章关系键：${target}`);
   }
 }
 
@@ -184,7 +184,7 @@ export async function getDocumentRelations(
     : { exists: false, references: [] };
 }
 
-/** Workspace 初始化时一次性把历史路径 target 迁移成稳定 Document id。 */
+/** 旧版兼容迁移；轻量版新关系直接使用文章路径，不再调用此流程。 */
 export async function migrateDocumentRelationTargets(
   root: string,
   documents: readonly { id: string; path: string | null }[],

@@ -1,306 +1,111 @@
-import { useEffect, useSyncExternalStore, useState, useRef } from 'react';
 import type { ComponentType } from 'react';
-import { TYPERT_REMOTE } from '../remote.js';
-import type { DocumentsApi } from '../documents.js';
-/** 仅类型导入：编译期擦除，koffi 不会进浏览器 bundle。 */
+import articleDrawerCss from './article-drawer.css?inline';
 import type { ClipboardSnapshot } from '../host/clipboard/index.js';
 import type { ReferenceDocument, ReferenceSummary, RelationLookup } from '../references.js';
-import { mountDocumentEditor } from './document-editor.js';
-import { mountReferencePanel } from './reference/panel.js';
-import { triggerRefSelector } from './reference/ref-selector.js';
-import { WorkspaceController } from './workspace-controller.js';
-import { installAnnotationAdapter } from './annotations/adapter.js';
-import { unwrapRemoteResult } from './dsh-adapter/remote-result.js';
-import { mountThreeColumn, type ColumnSpec } from './dsh-adapter/layout.js';
-import { findConversationCenter } from './dsh-adapter/selectors.js';
-import { SIFT_SETTINGS_NAMESPACE } from '../settings-contract.js';
-import {
-    SiftSettingsSection,
-    type ModelCatalog,
-    type SettingsScope,
-} from './settings/section.js';
 import type { ConversationAnalysisSettings } from '../settings-contract.js';
-import {
-    createLatestProfileReader,
-    layoutStorageKey,
-    resolveCurrentWorkspace,
-    shouldEnableSift,
-    type ProfileResult,
-    type SessionSelectionSource,
-    type SessionSnapshot,
-    type WorkspaceSnapshot,
-    type WorkspaceView,
-} from './dsh-adapter/workspace-entry.js';
+import { SIFT_SETTINGS_NAMESPACE } from '../settings-contract.js';
+import { TYPERT_REMOTE } from '../remote.js';
+import { installAnnotationAdapter } from './annotations/adapter.js';
+import { installArticleActionPlacement, mountArticleReferenceDrawer } from './article-drawer.js';
+import { unwrapRemoteResult } from './dsh-adapter/remote-result.js';
+import { resolveCurrentWorkspace, type WorkspaceSnapshot } from './dsh-adapter/workspace-entry.js';
+import { injectStyle, SIFT_PLUGIN_ID } from './renderer/inject-style.js';
+import { SiftSettingsSection, type ModelCatalog, type SettingsScope } from './settings/section.js';
 
 interface Source<T> { getSnapshot(): T; subscribe(listener: () => void): () => void }
-
 interface SiftRemote {
-    getWorkspaceProfile(input: { workspaceId: string }): Promise<ProfileResult>;
-    setWorkspaceProfile(input: { workspaceId: string; profile: 'default' | 'sift' }): Promise<ProfileResult>;
-    listDocuments: DocumentsApi['listDocuments'];
-    saveDocument: DocumentsApi['saveDocument'];
-    readDocumentContent: DocumentsApi['readDocumentContent'];
-    setActiveDocument(input: { workspaceId: string; documentId?: string }): Promise<Record<string, never>>;
-    addExistingDocument: DocumentsApi['addExistingDocument'];
-    detachDocument: DocumentsApi['detachDocument'];
-    removeDocument: DocumentsApi['removeDocument'];
-    /** 读取 Windows 原生剪贴板快照（Host 端 koffi 实现）。 */
-    readClipboard(input: Record<string, never>): Promise<ClipboardSnapshot>;
-    listReferences(input: { workspaceId: string }): Promise<ReferenceSummary[]>;
-    loadReference(input: { workspaceId: string; path: string }): Promise<ReferenceDocument>;
-    createReference(input: { workspaceId: string; name?: string }): Promise<{ path: string }>;
-    importConversationReference(input: { workspaceId: string; sourcePath: string }): Promise<{ path: string }>;
-    saveReference(input: { workspaceId: string; path: string; reference: ReferenceDocument }): Promise<Record<string, never>>;
-    analyzeConversation(input: { workspaceId: string; path: string; anchorGroupId: string }): Promise<ReferenceDocument>;
-    analyzeConversationTopic(input: { workspaceId: string; path: string; topic: string }): Promise<ReferenceDocument>;
-    removeReference(input: { workspaceId: string; path: string }): Promise<Record<string, never>>;
-    getDocumentRelations(input: { workspaceId: string; target: string }): Promise<RelationLookup>;
-    setDocumentRelations(input: { workspaceId: string; target: string; references: string[] }): Promise<Record<string, never>>;
-    /** Host 的原生文件对话框（在 Host 所在显示器弹出）。 */
-    pickSourceFiles(input: Record<string, never>): Promise<{ paths: string[]; cancelled: boolean; message?: string }>;
-    /** 在本机打开一个文件（配置的编辑器，未配置则系统默认程序）。 */
-    openSourcePath(input: { path: string }): Promise<Record<string, never>>;
+  readClipboard(input: Record<string, never>): Promise<ClipboardSnapshot>;
+  listReferences(input: { workspaceId: string }): Promise<ReferenceSummary[]>;
+  loadReference(input: { workspaceId: string; path: string }): Promise<ReferenceDocument>;
+  createReference(input: { workspaceId: string; name?: string }): Promise<{ path: string }>;
+  importConversationReference(input: { workspaceId: string; sourcePath: string }): Promise<{ path: string }>;
+  saveReference(input: { workspaceId: string; path: string; reference: ReferenceDocument }): Promise<Record<string, never>>;
+  analyzeConversation(input: { workspaceId: string; path: string; anchorGroupId: string }): Promise<ReferenceDocument>;
+  analyzeConversationTopic(input: { workspaceId: string; path: string; topic: string }): Promise<ReferenceDocument>;
+  removeReference(input: { workspaceId: string; path: string }): Promise<Record<string, never>>;
+  getArticleRelations(input: { workspaceId: string; target: string }): Promise<RelationLookup>;
+  setArticleRelations(input: { workspaceId: string; target: string; references: string[] }): Promise<Record<string, never>>;
+  pickSourceFiles(input: Record<string, never>): Promise<{ paths: string[]; cancelled: boolean; message?: string }>;
+  openSourcePath(input: { path: string }): Promise<Record<string, never>>;
 }
-
 interface ClientContext {
-    slots: { inject(name: string, factory: () => unknown): unknown; register(options: { name: string; id?: string; key?: string; order?: number; label?: () => string; inject?: (sessionId: string) => Record<string, unknown> }, component: ComponentType | unknown): () => void }
-    workspaces?: { list: Source<WorkspaceSnapshot>; create(input: { path: string }): Promise<WorkspaceView> }
-    sessions?: { list: Source<SessionSnapshot>; scope(sessionId: string): { bail(...args: unknown[]): unknown } | undefined }
-    uiWorkspace?: {
-        pickDirectory(): Promise<string | null>;
-        openWorkspace(workspaceId: string): Promise<void>;
-        /** DSH 0.2 Workspace 导航使用的当前主会话快照。 */
-        selection?: SessionSelectionSource;
-    }
-    remote: {
-        $mount(contribution: typeof TYPERT_REMOTE): Promise<() => void | Promise<void>>;
-        sift?: SiftRemote;
-        session?: { modelCatalog(): Promise<ModelCatalog | { ok: true; value: ModelCatalog }> };
-    }
-    configForms?: { get<T>(entryId: string): SettingsScope<T> }
-    get?(name: string): unknown
-    effect?(factory: () => () => void | Promise<void>, label?: string): unknown
-    startupError?: string
+  slots: { inject(name: string, factory: () => unknown): unknown; register(options: { name: string; id?: string; order?: number; label?: () => string; inject?: (sessionId: string) => Record<string, unknown> }, component: ComponentType<any> | unknown): () => void };
+  workspaces?: { list: Source<WorkspaceSnapshot> };
+  remote: { $mount(contribution: typeof TYPERT_REMOTE): Promise<() => void | Promise<void>>; session?: { modelCatalog(): Promise<ModelCatalog | { ok: true; value: ModelCatalog }> } };
+  configForms?: { get<T>(entryId: string): SettingsScope<T> };
+  get?(name: string): unknown;
+  effect?(factory: () => () => void | Promise<void>, label?: string): unknown;
 }
 
-/** Sift 三栏：左 Reference Board、中 Document、右原生对话。 */
-const SIFT_COLUMNS: readonly [ColumnSpec, ColumnSpec] = [
-    { id: 'reference', label: '参考', title: 'Reference Board', description: '当前有效参考' },
-    { id: 'document', label: '文档', title: 'Document', description: 'Markdown 正文' },
-];
+interface ArticleActionProps { readonly absolutePath: string; readonly openSiftReferences: (absolutePath: string) => void }
 
-function noopSubscribe() { return () => { } }
-const EMPTY_WORKSPACES: WorkspaceSnapshot = { items: [], phase: 'pending' };
-const EMPTY_SESSIONS: SessionSnapshot = { phase: 'pending' };
-const EMPTY_SELECTION: ReturnType<SessionSelectionSource['getSnapshot']> = {};
-
-function WorkspaceProfileBadge({ ctx, selection }: { ctx: ClientContext; selection?: SessionSelectionSource }) {
-    const workspaces = ctx.workspaces?.list;
-    const sessions = ctx.sessions?.list;
-    const workspaceSnapshot = useSyncExternalStore(workspaces ? listener => workspaces.subscribe(listener) : noopSubscribe, workspaces ? () => workspaces.getSnapshot() : () => EMPTY_WORKSPACES);
-    const sessionSnapshot = useSyncExternalStore(sessions ? listener => sessions.subscribe(listener) : noopSubscribe, sessions ? () => sessions.getSnapshot() : () => EMPTY_SESSIONS);
-    const selectionSnapshot = useSyncExternalStore(selection ? listener => selection.subscribe(listener) : noopSubscribe, selection ? () => selection.getSnapshot() : () => EMPTY_SELECTION);
-    const currentSessionId = selectionSnapshot.sessionId;
-    const workspace = resolveCurrentWorkspace(workspaceSnapshot, currentSessionId);
-    const [state, setState] = useState<{ id?: string; result?: ProfileResult; loading: boolean }>({ loading: false });
-    const latestReader = useRef<ReturnType<typeof createLatestProfileReader> | undefined>(undefined);
-
-    useEffect(() => {
-        let active = true;
-        if (!workspace) {
-            setState({ loading: false });
-            return () => { active = false };
-        }
-        setState({ id: workspace.workspaceId, loading: true });
-        const reader = ctx.remote?.sift?.getWorkspaceProfile;
-        if (!reader) {
-            setState({ id: workspace.workspaceId, result: { workspaceId: workspace.workspaceId, title: workspace.title, profile: 'default', status: 'invalid', message: ctx.startupError ?? '工作区类型服务不可用。' }, loading: false });
-            return () => { active = false };
-        }
-        latestReader.current ??= createLatestProfileReader(id => reader({ workspaceId: id }));
-        void latestReader.current(workspace.workspaceId).then(result => {
-            if (active && result) setState({ id: workspace.workspaceId, result, loading: false });
-        }, error => {
-            if (active) setState({ id: workspace.workspaceId, result: { workspaceId: workspace.workspaceId, title: workspace.title, profile: 'default', status: 'invalid', message: error instanceof Error ? error.message : '工作区类型读取失败。' }, loading: false });
-        });
-        return () => { active = false };
-    }, [ctx, workspace?.workspaceId, workspace?.title]);
-
-    if (!workspace || workspaceSnapshot.phase !== 'ready' || sessionSnapshot.phase === 'pending') return <span data-dsh-sift-profile="unselected">未选择工作区</span>;
-    if (state.id !== workspace.workspaceId || state.loading) return <span data-dsh-sift-profile="loading">正在读取工作区…</span>;
-    const result = state.result;
-    return <span data-dsh-sift-profile={result?.status === 'invalid' ? 'invalid' : result?.profile ?? 'default'} title={result?.message}>{workspace.title} · {result?.profile ?? 'default'}{result?.message ? `（${result.message}）` : ''}</span>;
+function ArticleReferenceAction({ absolutePath, openSiftReferences }: ArticleActionProps) {
+  return <button type="button" data-sift-article-action="" title="当前文章的参考" aria-label="打开当前文章的参考" onClick={() => openSiftReferences(absolutePath)}>
+    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h4.2A1.8 1.8 0 0 1 8 4v9a1.8 1.8 0 0 0-1.3-.5H2.5zM13.5 3.5H9.3A1.8 1.8 0 0 0 8 4v9a1.8 1.8 0 0 1 1.3-.5h4.2z" /></svg>
+  </button>;
 }
 
-// "添加工作区"按钮（installWorkspaceTypeCreator）
-import { installWorkspaceTypeCreator } from './workspace-creator.js';
-export { installWorkspaceTypeCreator };
-
-export const inject = ['slots', 'workspaces', 'sessions', 'remote', 'remote.session', 'uiWorkspace', 'configForms'];
+export const inject = ['slots', 'workspaces', 'remote', 'remote.session', 'configForms'];
 
 export function apply(ctx: ClientContext): void {
-    const selection = ctx.uiWorkspace?.selection;
-    type MountedRemote = { [K in keyof SiftRemote]: (input: Parameters<SiftRemote[K]>[0]) => Promise<Awaited<ReturnType<SiftRemote[K]>> | { ok: true; value: Awaited<ReturnType<SiftRemote[K]>> }> };
-    const mounted = (async (): Promise<MountedRemote> => {
-        const disposeRemote = await ctx.remote.$mount(TYPERT_REMOTE);
-        ctx.effect?.(() => disposeRemote, 'sift: workspace profile remote');
-        const remote = ctx.get?.('remote.sift') as MountedRemote | undefined;
-        if (!remote) throw new Error('Sift Remote 已挂载，但服务不可用。');
-        return remote;
-    })();
-    const unwrap = unwrapRemoteResult;
-    const documentsApi: DocumentsApi = {
-        listDocuments: async input => unwrap(await (await mounted).listDocuments(input)),
-        saveDocument: async input => unwrap(await (await mounted).saveDocument(input)),
-        readDocumentContent: async input => unwrap(await (await mounted).readDocumentContent(input)),
-        addExistingDocument: async input => unwrap(await (await mounted).addExistingDocument(input)),
-        detachDocument: async input => unwrap(await (await mounted).detachDocument(input)),
-        removeDocument: async input => unwrap(await (await mounted).removeDocument(input)),
-    };
-    const siftRemote = {
-        getWorkspaceProfile: async (input: { workspaceId: string }) => unwrap(await (await mounted).getWorkspaceProfile(input)),
-        setWorkspaceProfile: async (input: { workspaceId: string; profile: 'default' | 'sift' }) => unwrap(await (await mounted).setWorkspaceProfile(input)),
-        readClipboard: async () => unwrap(await (await mounted).readClipboard({})),
-        listReferences: async (input: { workspaceId: string }) => unwrap(await (await mounted).listReferences(input)),
-        loadReference: async (input: { workspaceId: string; path: string }) => unwrap(await (await mounted).loadReference(input)),
-        createReference: async (input: { workspaceId: string; name?: string }) => unwrap(await (await mounted).createReference(input)),
-        importConversationReference: async (input: { workspaceId: string; sourcePath: string }) => unwrap(await (await mounted).importConversationReference(input)),
-        saveReference: async (input: { workspaceId: string; path: string; reference: ReferenceDocument }) => unwrap(await (await mounted).saveReference(input)),
-        analyzeConversation: async (input: { workspaceId: string; path: string; anchorGroupId: string }) => unwrap(await (await mounted).analyzeConversation(input)),
-        analyzeConversationTopic: async (input: { workspaceId: string; path: string; topic: string }) => unwrap(await (await mounted).analyzeConversationTopic(input)),
-        removeReference: async (input: { workspaceId: string; path: string }) => unwrap(await (await mounted).removeReference(input)),
-        getDocumentRelations: async (input: { workspaceId: string; target: string }) => unwrap(await (await mounted).getDocumentRelations(input)),
-        setDocumentRelations: async (input: { workspaceId: string; target: string; references: string[] }) => unwrap(await (await mounted).setDocumentRelations(input)),
-        pickSourceFiles: async () => unwrap(await (await mounted).pickSourceFiles({})),
-        openSourcePath: async (input: { path: string }) => unwrap(await (await mounted).openSourcePath(input)),
-        setActiveDocument: async (input: { workspaceId: string; documentId?: string }) => unwrap(await (await mounted).setActiveDocument(input)),
-        ...documentsApi,
-    };
-    const remoteContext = Object.create(ctx, {
-        remote: { value: { sift: siftRemote }, writable: false, configurable: true, enumerable: true },
-    }) as ClientContext;
+  type RemoteResult<K extends keyof SiftRemote> = SiftRemote[K] extends (...args: any[]) => Promise<infer R> ? R : never;
+  type MountedRemote = { [K in keyof SiftRemote]: (input: Parameters<SiftRemote[K]>[0]) => Promise<Awaited<ReturnType<SiftRemote[K]>> | { ok: true; value: Awaited<ReturnType<SiftRemote[K]>> }> };
+  const mounted = (async (): Promise<MountedRemote> => {
+    const disposeRemote = await ctx.remote.$mount(TYPERT_REMOTE);
+    ctx.effect?.(() => disposeRemote, 'sift: remote');
+    const remote = ctx.get?.('remote.sift') as MountedRemote | undefined;
+    if (!remote) throw new Error('Sift Remote 已挂载，但服务不可用。');
+    return remote;
+  })();
+  const call = async <K extends keyof SiftRemote>(method: K, input: Parameters<SiftRemote[K]>[0]): Promise<RemoteResult<K>> => unwrapRemoteResult(await (await mounted)[method](input)) as RemoteResult<K>;
 
-    if (ctx.configForms && ctx.remote.session) {
-        const scope = ctx.configForms.get<ConversationAnalysisSettings>(SIFT_SETTINGS_NAMESPACE);
-        const loadModelCatalog = async () => unwrap(await ctx.remote.session!.modelCatalog());
-        ctx.slots.inject('settings.section', () => ctx.slots.register({
-            name: 'settings.section',
-            id: 'sift',
-            order: 35,
-            label: () => 'Sift',
-            inject: () => ({ settings: scope, loadModelCatalog }),
-        }, SiftSettingsSection));
-    }
+  if (ctx.configForms && ctx.remote.session) {
+    const scope = ctx.configForms.get<ConversationAnalysisSettings>(SIFT_SETTINGS_NAMESPACE);
+    const loadModelCatalog = async () => unwrapRemoteResult(await ctx.remote.session!.modelCatalog());
+    ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'sift', order: 35, label: () => 'Sift', inject: () => ({ settings: scope, loadModelCatalog }) }, SiftSettingsSection));
+  }
+  if (typeof document === 'undefined') return;
 
-    //侧边下方插槽展示当前的工作区是哪个以及类型
-    ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({ name: 'sidebar.footer.action', id: 'sift-workspace-profile', order: 90 }, () => <WorkspaceProfileBadge ctx={remoteContext} selection={selection} />));
-    if (typeof document === 'undefined') return;
+  const disposeBaseCss = injectStyle(SIFT_PLUGIN_ID, 'article-action.css', articleDrawerCss);
+  const disposeAnnotations = installAnnotationAdapter();
+  const disposePlacement = installArticleActionPlacement();
+  let disposeDrawer: (() => void) | undefined;
+  let drawerKey: string | undefined;
+  const closeDrawer = () => { disposeDrawer?.(); disposeDrawer = undefined; drawerKey = undefined; };
 
-    const disposeCreator = installWorkspaceTypeCreator(ctx, input => remoteContext.remote.sift!.setWorkspaceProfile(input));
-    ctx.effect?.(() => disposeCreator, 'sift: workspace type creator');
-    const disposeAnnotations = installAnnotationAdapter();
-    ctx.effect?.(() => disposeAnnotations, 'sift: annotations adapter');
-
-    let generation = 0;
-    let mountedCenter: HTMLElement | null = null;
-    let activeWorkspaceId: string | undefined;
-    let disposeLayout: (() => void) | undefined;
-    const workspaceControllers = new Map<string, WorkspaceController>();
-    const latestProfile = createLatestProfileReader(id => remoteContext.remote.sift!.getWorkspaceProfile({ workspaceId: id }));
-
-    const clearLayout = () => {
-        disposeLayout?.();
-        disposeLayout = undefined;
-        mountedCenter = null;
-        activeWorkspaceId = undefined;
-    };
-
-    const showLayout = (workspace: WorkspaceView) => {
-        // 关键 DOM 锚点不存在时放弃启用三栏，而不是继续重排页面（实施文档 §7.2）。
-        const center = findConversationCenter();
-        if (!center) {
-            console.error('Sift: 未找到 DSH center column 锚点，已跳过三栏布局。');
-            clearLayout();
-            return;
-        }
-        if (mountedCenter === center && activeWorkspaceId === workspace.workspaceId) return;
-        clearLayout();
-        mountedCenter = center;
-        activeWorkspaceId = workspace.workspaceId;
-        let workspaceController = workspaceControllers.get(workspace.workspaceId);
-        if (!workspaceController) {
-            workspaceController = new WorkspaceController({
-                getDocumentRelations: ({ target }) => remoteContext.remote.sift!.getDocumentRelations({ workspaceId: workspace.workspaceId, target }),
-                setDocumentRelations: ({ target, references }) => remoteContext.remote.sift!.setDocumentRelations({ workspaceId: workspace.workspaceId, target, references }).then(() => undefined),
-            });
-            workspaceControllers.set(workspace.workspaceId, workspaceController);
-        }
-        disposeLayout = mountThreeColumn(center, {
-            columns: SIFT_COLUMNS,
-            storageKey: layoutStorageKey(workspace.workspaceId),
-            mount: (id, section) => id === 'reference'
-                ? (() => {
-                    try {
-                        const disposePanel = mountReferencePanel(section, {
-                            api: {
-                                listReferences: () => remoteContext.remote.sift!.listReferences({ workspaceId: workspace.workspaceId }),
-                                loadReference: path => remoteContext.remote.sift!.loadReference({ workspaceId: workspace.workspaceId, path }),
-                                createReference: name => remoteContext.remote.sift!.createReference({ workspaceId: workspace.workspaceId, name }),
-                                importConversationReference: sourcePath => remoteContext.remote.sift!.importConversationReference({ workspaceId: workspace.workspaceId, sourcePath }),
-                                saveReference: (path, reference) => remoteContext.remote.sift!.saveReference({ workspaceId: workspace.workspaceId, path, reference }).then(() => undefined),
-                                analyzeConversation: (path, anchorGroupId) => remoteContext.remote.sift!.analyzeConversation({ workspaceId: workspace.workspaceId, path, anchorGroupId }),
-                                analyzeConversationTopic: (path, topic) => remoteContext.remote.sift!.analyzeConversationTopic({ workspaceId: workspace.workspaceId, path, topic }),
-                                removeReference: path => remoteContext.remote.sift!.removeReference({ workspaceId: workspace.workspaceId, path }).then(() => undefined),
-                                pickSourceFiles: () => remoteContext.remote.sift!.pickSourceFiles({}),
-                                openSourcePath: path => remoteContext.remote.sift!.openSourcePath({ path }).then(() => undefined),
-                            },
-                            readClipboard: () => remoteContext.remote.sift!.readClipboard({}),
-                            workspace: workspaceController,
-                        });
-                        return () => disposePanel();
-                    } catch (error) {
-                        // 面板挂载失败只降级左栏，绝不拖垮三栏布局。
-                        console.error('Sift: 参考面板挂载失败', error);
-                        section.textContent = '参考面板加载失败';
-                        return () => { section.textContent = ''; };
-                    }
-                })()
-                : mountDocumentEditor(section, {
-                    workspaceId: workspace.workspaceId,
-                    api: documentsApi,
-                    pickDirectory: () => ctx.uiWorkspace?.pickDirectory() ?? Promise.resolve(null),
-                    pickOutputFiles: () => remoteContext.remote.sift!.pickSourceFiles({}),
-                    workspace: workspaceController,
-                    openDocumentPath: path => remoteContext.remote.sift!.openSourcePath({ path }).then(() => undefined),
-                    setActiveDocument: documentId => remoteContext.remote.sift!.setActiveDocument({ workspaceId: workspace.workspaceId, ...(documentId === undefined ? {} : { documentId }) }).then(() => undefined),
-                    editRelations: () => {
-                        return remoteContext.remote.sift!.listReferences({ workspaceId: workspace.workspaceId }).then(all => triggerRefSelector({
-                            all,
-                            checked: workspaceController.visibleReferences(),
-                            onSave: selected => workspaceController.replaceActiveRelations(selected),
-                        }));
-                    },
-                }),
+  ctx.slots.inject('sidebar.right.tab.document.actions', () => ctx.slots.register({
+    name: 'sidebar.right.tab.document.actions', id: 'sift-reference', order: -100,
+    inject: sessionId => ({
+      openSiftReferences: (absolutePath: string) => {
+        const workspace = resolveCurrentWorkspace(ctx.workspaces?.list.getSnapshot(), sessionId);
+        if (!workspace) return;
+        const key = `${workspace.workspaceId}:${absolutePath}`;
+        if (drawerKey === key) { closeDrawer(); return; }
+        closeDrawer(); drawerKey = key;
+        const workspaceId = workspace.workspaceId;
+        disposeDrawer = mountArticleReferenceDrawer({
+          workspaceId, absolutePath, onClose: closeDrawer,
+          readClipboard: () => call('readClipboard', {}),
+          api: {
+            listReferences: () => call('listReferences', { workspaceId }),
+            loadReference: path => call('loadReference', { workspaceId, path }),
+            createReference: name => call('createReference', { workspaceId, ...(name === undefined ? {} : { name }) }),
+            importConversationReference: sourcePath => call('importConversationReference', { workspaceId, sourcePath }),
+            saveReference: (path, reference) => call('saveReference', { workspaceId, path, reference }).then(() => undefined),
+            analyzeConversation: (path, anchorGroupId) => call('analyzeConversation', { workspaceId, path, anchorGroupId }),
+            analyzeConversationTopic: (path, topic) => call('analyzeConversationTopic', { workspaceId, path, topic }),
+            removeReference: path => call('removeReference', { workspaceId, path }).then(() => undefined),
+            pickSourceFiles: () => call('pickSourceFiles', {}),
+            openSourcePath: path => call('openSourcePath', { path }).then(() => undefined),
+            getDocumentRelations: ({ target }) => call('getArticleRelations', { workspaceId, target }),
+            setDocumentRelations: ({ target, references }) => call('setArticleRelations', { workspaceId, target, references }).then(() => undefined),
+          },
         });
-    };
+      },
+    }),
+  }, ArticleReferenceAction));
 
-    const reconcile = async () => {
-        const request = ++generation;
-        const workspace = resolveCurrentWorkspace(ctx.workspaces?.list.getSnapshot(), selection?.getSnapshot().sessionId);
-        if (!workspace) { clearLayout(); return; }
-        try {
-            const profile = await latestProfile(workspace.workspaceId);
-            if (request !== generation) return;
-            if (shouldEnableSift(profile)) showLayout(workspace);
-            else clearLayout();
-        } catch { if (request === generation) clearLayout(); }
-    };
-
-    const disposeWorkspaces = ctx.workspaces?.list.subscribe(() => { void reconcile(); });
-    const disposeSessions = ctx.sessions?.list.subscribe(() => { void reconcile(); });
-    const disposeSelection = selection?.subscribe(() => { void reconcile(); });
-    ctx.effect?.(() => () => { disposeWorkspaces?.(); disposeSessions?.(); disposeSelection?.(); clearLayout(); }, 'sift: native conversation three-column layout');
-    void reconcile();
+  ctx.effect?.(() => () => { closeDrawer(); disposePlacement(); disposeAnnotations(); disposeBaseCss(); }, 'sift: article references');
 }
 
-export { WorkspaceProfileBadge };
+export { ArticleReferenceAction };
