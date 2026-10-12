@@ -17,10 +17,16 @@ export interface ArticleReferenceDrawerOptions {
   onClose(): void;
 }
 
+export interface ArticleReferencePane {
+  /** 文件 Tab 被重新挂载时，把同一个参考栏接回新的预览节点。 */
+  attach(previewElement: HTMLElement): void;
+  dispose(): void;
+}
+
 function basename(path: string): string { return path.split(/[\\/]/).filter(Boolean).at(-1) ?? path; }
 
 /** 在当前 DSH 文件旁打开轻量参考栏；文章路径本身就是关系主键。 */
-export function mountArticleReferenceDrawer(options: ArticleReferenceDrawerOptions): () => void {
+export function mountArticleReferenceDrawer(options: ArticleReferenceDrawerOptions): ArticleReferencePane {
   const disposeCss = injectStyle(SIFT_PLUGIN_ID, 'article-drawer.css', drawerCss);
   const drawer = document.createElement('aside'); drawer.dataset.siftArticleDrawer = '';
   const header = document.createElement('header'); header.dataset.siftArticleDrawerHeader = '';
@@ -30,11 +36,23 @@ export function mountArticleReferenceDrawer(options: ArticleReferenceDrawerOptio
   const body = document.createElement('section'); body.dataset.siftArticleDrawerBody = '';
   const status = document.createElement('div'); status.dataset.siftArticleDrawerStatus = ''; status.textContent = '正在读取当前文章的参考…'; body.appendChild(status);
   header.append(title, close); drawer.append(header, body);
-  const splitHost = options.previewElement.parentElement;
-  if (!splitHost) throw new Error('当前文件预览尚未挂载。');
-  splitHost.dataset.siftArticleSplit = '';
-  options.previewElement.dataset.siftArticlePreview = '';
-  options.previewElement.after(drawer);
+  let attachedPreview: HTMLElement | undefined;
+  let splitHost: HTMLElement | undefined;
+  const attach = (previewElement: HTMLElement) => {
+    if (attachedPreview === previewElement && drawer.isConnected) return;
+    const nextHost = previewElement.parentElement;
+    if (!nextHost) return;
+    const previousPreview = attachedPreview;
+    const previousHost = splitHost;
+    nextHost.dataset.siftArticleSplit = '';
+    previewElement.dataset.siftArticlePreview = '';
+    previewElement.after(drawer);
+    attachedPreview = previewElement;
+    splitHost = nextHost;
+    if (previousPreview && previousPreview !== previewElement) delete previousPreview.dataset.siftArticlePreview;
+    if (previousHost && previousHost !== nextHost && !previousHost.querySelector('[data-sift-article-drawer]')) delete previousHost.dataset.siftArticleSplit;
+  };
+  attach(options.previewElement);
 
   const controller = new WorkspaceController({ getDocumentRelations: options.api.getDocumentRelations, setDocumentRelations: options.api.setDocumentRelations });
   controller.setOutputTabs([options.absolutePath]);
@@ -46,12 +64,13 @@ export function mountArticleReferenceDrawer(options: ArticleReferenceDrawerOptio
     disposePanel = mountReferencePanel(body, { api: options.api, readClipboard: options.readClipboard, workspace: controller });
   }, error => { if (!disposed) status.textContent = `参考加载失败：${error instanceof Error ? error.message : String(error)}`; });
 
-  return () => {
+  const dispose = () => {
     disposed = true; disposePanel?.(); drawer.remove();
-    delete options.previewElement.dataset.siftArticlePreview;
-    if (!splitHost.querySelector('[data-sift-article-drawer]')) delete splitHost.dataset.siftArticleSplit;
+    if (attachedPreview) delete attachedPreview.dataset.siftArticlePreview;
+    if (splitHost && !splitHost.querySelector('[data-sift-article-drawer]')) delete splitHost.dataset.siftArticleSplit;
     disposeCss();
   };
+  return { attach, dispose };
 }
 
 /** DSH 暂无“Markdown”按钮前的专用 slot；把已注册 action 移到对应原生控件之前。 */

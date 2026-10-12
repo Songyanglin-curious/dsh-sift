@@ -18,7 +18,7 @@ describe('当前文章并排参考栏', () => {
     const service = api(); const onClose = vi.fn();
     const splitHost = document.createElement('main');
     const previewElement = document.createElement('section'); splitHost.appendChild(previewElement); document.body.appendChild(splitHost);
-    const dispose = mountArticleReferenceDrawer({ workspaceId: 'ws-1', absolutePath: 'D:\\notes\\article.md', previewElement, api: service as never, readClipboard: vi.fn(), onClose });
+    const pane = mountArticleReferenceDrawer({ workspaceId: 'ws-1', absolutePath: 'D:\\notes\\article.md', previewElement, api: service as never, readClipboard: vi.fn(), onClose });
     await Promise.resolve(); await Promise.resolve();
     expect(service.getDocumentRelations).toHaveBeenCalledWith({ target: 'D:\\notes\\article.md' });
     expect(service.listReferences).toHaveBeenCalledOnce();
@@ -28,8 +28,15 @@ describe('当前文章并排参考栏', () => {
     expect(splitHost.dataset.siftArticleSplit).toBe('');
     (document.querySelector('[data-sift-article-drawer-close]') as HTMLButtonElement).click();
     expect(onClose).toHaveBeenCalledOnce();
-    dispose();
+    const nextHost = document.createElement('main');
+    const nextPreview = document.createElement('section'); nextHost.appendChild(nextPreview); document.body.appendChild(nextHost);
+    const panelBeforeSwitch = document.querySelector('[data-sift-ref-panel]');
+    pane.attach(nextPreview);
+    expect(Array.from(nextHost.children)).toEqual([nextPreview, document.querySelector('[data-sift-article-drawer]')]);
+    expect(document.querySelector('[data-sift-ref-panel]')).toBe(panelBeforeSwitch);
     expect(splitHost.dataset.siftArticleSplit).toBeUndefined();
+    pane.dispose();
+    expect(nextHost.dataset.siftArticleSplit).toBeUndefined();
   });
 
   it('把参考图标放到原生 Markdown 菜单之前', async () => {

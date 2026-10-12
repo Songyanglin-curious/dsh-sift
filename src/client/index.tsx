@@ -6,7 +6,7 @@ import type { ConversationAnalysisSettings } from '../settings-contract.js';
 import { SIFT_SETTINGS_NAMESPACE } from '../settings-contract.js';
 import { TYPERT_REMOTE } from '../remote.js';
 import { installAnnotationAdapter } from './annotations/adapter.js';
-import { installArticleActionPlacement, mountArticleReferenceDrawer } from './article-drawer.js';
+import { installArticleActionPlacement, mountArticleReferenceDrawer, type ArticleReferencePane } from './article-drawer.js';
 import { unwrapRemoteResult } from './dsh-adapter/remote-result.js';
 import { resolveCurrentWorkspace, type WorkspaceSnapshot } from './dsh-adapter/workspace-entry.js';
 import { injectStyle, SIFT_PLUGIN_ID } from './renderer/inject-style.js';
@@ -37,10 +37,17 @@ interface ClientContext {
   effect?(factory: () => () => void | Promise<void>, label?: string): unknown;
 }
 
-interface ArticleActionProps { readonly absolutePath: string; readonly openSiftReferences: (absolutePath: string, previewElement: HTMLElement) => void }
+interface ArticleActionProps {
+  readonly absolutePath: string;
+  readonly openSiftReferences: (absolutePath: string, previewElement: HTMLElement) => void;
+  readonly registerSiftPreview: (absolutePath: string, previewElement: HTMLElement) => void;
+}
 
-function ArticleReferenceAction({ absolutePath, openSiftReferences }: ArticleActionProps) {
-  return <button type="button" data-sift-article-action="" title="当前文章的参考" aria-label="打开当前文章的参考" onClick={event => {
+function ArticleReferenceAction({ absolutePath, openSiftReferences, registerSiftPreview }: ArticleActionProps) {
+  return <button ref={button => {
+    const previewElement = button?.closest('[data-textpreview-url]') as HTMLElement | null;
+    if (previewElement) registerSiftPreview(absolutePath, previewElement);
+  }} type="button" data-sift-article-action="" title="当前文章的参考" aria-label="打开当前文章的参考" onClick={event => {
     const previewElement = event.currentTarget.closest('[data-textpreview-url]') as HTMLElement | null;
     if (previewElement) openSiftReferences(absolutePath, previewElement);
   }}>
@@ -72,22 +79,26 @@ export function apply(ctx: ClientContext): void {
   const disposeBaseCss = injectStyle(SIFT_PLUGIN_ID, 'article-action.css', articleDrawerCss);
   const disposeAnnotations = installAnnotationAdapter();
   const disposePlacement = installArticleActionPlacement();
-  let disposeDrawer: (() => void) | undefined;
-  let drawerKey: string | undefined;
-  const closeDrawer = () => { disposeDrawer?.(); disposeDrawer = undefined; drawerKey = undefined; };
+  const panes = new Map<string, ArticleReferencePane>();
+  const paneKey = (workspaceId: string, absolutePath: string) => `${workspaceId}:${absolutePath}`;
+  const closePane = (key: string) => { panes.get(key)?.dispose(); panes.delete(key); };
 
   ctx.slots.inject('sidebar.right.tab.document.actions', () => ctx.slots.register({
     name: 'sidebar.right.tab.document.actions', id: 'sift-reference', order: -100,
     inject: sessionId => ({
+      registerSiftPreview: (absolutePath: string, previewElement: HTMLElement) => {
+        const workspace = resolveCurrentWorkspace(ctx.workspaces?.list.getSnapshot(), sessionId);
+        if (!workspace) return;
+        panes.get(paneKey(workspace.workspaceId, absolutePath))?.attach(previewElement);
+      },
       openSiftReferences: (absolutePath: string, previewElement: HTMLElement) => {
         const workspace = resolveCurrentWorkspace(ctx.workspaces?.list.getSnapshot(), sessionId);
         if (!workspace) return;
-        const key = `${workspace.workspaceId}:${absolutePath}`;
-        if (drawerKey === key) { closeDrawer(); return; }
-        closeDrawer(); drawerKey = key;
         const workspaceId = workspace.workspaceId;
-        disposeDrawer = mountArticleReferenceDrawer({
-          workspaceId, absolutePath, previewElement, onClose: closeDrawer,
+        const key = paneKey(workspaceId, absolutePath);
+        if (panes.has(key)) { closePane(key); return; }
+        const pane = mountArticleReferenceDrawer({
+          workspaceId, absolutePath, previewElement, onClose: () => closePane(key),
           readClipboard: () => call('readClipboard', {}),
           api: {
             listReferences: () => call('listReferences', { workspaceId }),
@@ -104,11 +115,12 @@ export function apply(ctx: ClientContext): void {
             setDocumentRelations: ({ target, references }) => call('setArticleRelations', { workspaceId, target, references }).then(() => undefined),
           },
         });
+        panes.set(key, pane);
       },
     }),
   }, ArticleReferenceAction));
 
-  ctx.effect?.(() => () => { closeDrawer(); disposePlacement(); disposeAnnotations(); disposeBaseCss(); }, 'sift: article references');
+  ctx.effect?.(() => () => { for (const pane of panes.values()) pane.dispose(); panes.clear(); disposePlacement(); disposeAnnotations(); disposeBaseCss(); }, 'sift: article references');
 }
 
 export { ArticleReferenceAction };
