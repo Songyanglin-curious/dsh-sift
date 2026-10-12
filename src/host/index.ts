@@ -285,7 +285,8 @@ export class SiftService extends TypertRemoteService {
   }
 
   @Remote
-  async analyzeConversation(input: { workspaceId: string; path: string; anchorGroupId: string }) {
+  /** 以指定问答为锚点分析会话，并响应客户端取消。 */
+  async analyzeConversation(input: { workspaceId: string; path: string; anchorGroupId: string }, signal: AbortSignal) {
     const requestStartedAt = Date.now();
     const analysisId = randomUUID().slice(0, 8);
     const root = this.workspacePath(input.workspaceId);
@@ -301,7 +302,7 @@ export class SiftService extends TypertRemoteService {
     if (!isConversationReference(reference)) throw new Error('当前参考不是会话类型。');
     let analysis;
     try {
-      analysis = await analyzeConversation(reference, input.anchorGroupId, this.getAnalysisSettings(), this.llm, undefined, timing);
+      analysis = await analyzeConversation(reference, input.anchorGroupId, this.getAnalysisSettings(), this.llm, signal, timing);
     } catch (error) {
       timing('remote.error', { message: error instanceof Error ? error.message : String(error) });
       await flush();
@@ -321,7 +322,8 @@ export class SiftService extends TypertRemoteService {
   }
 
   @Remote
-  async analyzeConversationTopic(input: { workspaceId: string; path: string; topic: string }) {
+  /** 按主题分析会话，并响应客户端取消。 */
+  async analyzeConversationTopic(input: { workspaceId: string; path: string; topic: string }, signal: AbortSignal) {
     const requestStartedAt = Date.now();
     const analysisId = randomUUID().slice(0, 8);
     const root = this.workspacePath(input.workspaceId);
@@ -337,7 +339,7 @@ export class SiftService extends TypertRemoteService {
     if (!isConversationReference(reference)) throw new Error('当前参考不是会话类型。');
     let analysis;
     try {
-      analysis = await analyzeConversationTopic(reference, input.topic, this.getAnalysisSettings(), this.llm, undefined, timing);
+      analysis = await analyzeConversationTopic(reference, input.topic, this.getAnalysisSettings(), this.llm, signal, timing);
     } catch (error) {
       timing('remote.error', { message: error instanceof Error ? error.message : String(error) });
       await flush();

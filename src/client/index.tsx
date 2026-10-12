@@ -20,8 +20,8 @@ interface SiftRemote {
   createReference(input: { workspaceId: string; name?: string }): Promise<{ path: string }>;
   importConversationReference(input: { workspaceId: string; sourcePath: string }): Promise<{ path: string }>;
   saveReference(input: { workspaceId: string; path: string; reference: ReferenceDocument }): Promise<Record<string, never>>;
-  analyzeConversation(input: { workspaceId: string; path: string; anchorGroupId: string }): Promise<ReferenceDocument>;
-  analyzeConversationTopic(input: { workspaceId: string; path: string; topic: string }): Promise<ReferenceDocument>;
+  analyzeConversation(input: { workspaceId: string; path: string; anchorGroupId: string }, signal?: AbortSignal): Promise<ReferenceDocument>;
+  analyzeConversationTopic(input: { workspaceId: string; path: string; topic: string }, signal?: AbortSignal): Promise<ReferenceDocument>;
   removeReference(input: { workspaceId: string; path: string }): Promise<Record<string, never>>;
   getArticleRelations(input: { workspaceId: string; target: string }): Promise<RelationLookup>;
   setArticleRelations(input: { workspaceId: string; target: string; references: string[] }): Promise<Record<string, never>>;
@@ -59,7 +59,7 @@ export const inject = ['slots', 'workspaces', 'remote', 'remote.session', 'confi
 
 export function apply(ctx: ClientContext): void {
   type RemoteResult<K extends keyof SiftRemote> = SiftRemote[K] extends (...args: any[]) => Promise<infer R> ? R : never;
-  type MountedRemote = { [K in keyof SiftRemote]: (input: Parameters<SiftRemote[K]>[0]) => Promise<Awaited<ReturnType<SiftRemote[K]>> | { ok: true; value: Awaited<ReturnType<SiftRemote[K]>> }> };
+  type MountedRemote = { [K in keyof SiftRemote]: (...args: Parameters<SiftRemote[K]>) => Promise<Awaited<ReturnType<SiftRemote[K]>> | { ok: true; value: Awaited<ReturnType<SiftRemote[K]>> }> };
   const mounted = (async (): Promise<MountedRemote> => {
     const disposeRemote = await ctx.remote.$mount(TYPERT_REMOTE);
     ctx.effect?.(() => disposeRemote, 'sift: remote');
@@ -67,7 +67,8 @@ export function apply(ctx: ClientContext): void {
     if (!remote) throw new Error('Sift Remote 已挂载，但服务不可用。');
     return remote;
   })();
-  const call = async <K extends keyof SiftRemote>(method: K, input: Parameters<SiftRemote[K]>[0]): Promise<RemoteResult<K>> => unwrapRemoteResult(await (await mounted)[method](input)) as RemoteResult<K>;
+  /** 调用挂载的 Sift Remote，并在分析任务中透传取消信号。 */
+  const call = async <K extends keyof SiftRemote>(method: K, ...args: Parameters<SiftRemote[K]>): Promise<RemoteResult<K>> => unwrapRemoteResult(await (await mounted)[method](...args)) as RemoteResult<K>;
 
   if (ctx.configForms && ctx.remote.session) {
     const scope = ctx.configForms.get<ConversationAnalysisSettings>(SIFT_SETTINGS_NAMESPACE);
@@ -106,8 +107,8 @@ export function apply(ctx: ClientContext): void {
             createReference: name => call('createReference', { workspaceId, ...(name === undefined ? {} : { name }) }),
             importConversationReference: sourcePath => call('importConversationReference', { workspaceId, sourcePath }),
             saveReference: (path, reference) => call('saveReference', { workspaceId, path, reference }).then(() => undefined),
-            analyzeConversation: (path, anchorGroupId) => call('analyzeConversation', { workspaceId, path, anchorGroupId }),
-            analyzeConversationTopic: (path, topic) => call('analyzeConversationTopic', { workspaceId, path, topic }),
+            analyzeConversation: (path, anchorGroupId, signal) => call('analyzeConversation', { workspaceId, path, anchorGroupId }, signal),
+            analyzeConversationTopic: (path, topic, signal) => call('analyzeConversationTopic', { workspaceId, path, topic }, signal),
             removeReference: path => call('removeReference', { workspaceId, path }).then(() => undefined),
             pickSourceFiles: () => call('pickSourceFiles', {}),
             openSourcePath: path => call('openSourcePath', { path }).then(() => undefined),

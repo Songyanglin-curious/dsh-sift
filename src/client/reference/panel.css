@@ -38,6 +38,9 @@ section > [data-sift-ref-panel] {
 .sift-conversation-topic-clear:hover { background: var(--dsw-alias-bg-raised, #f4f5f6); color: var(--dsw-alias-label-primary, #111827); }
 .sift-conversation-topic-clear[hidden] { display: none; }
 .sift-conversation-topic-bar > button { flex: none; border: 1px solid var(--dsw-alias-border-l3, #d1d5db); border-radius: 7px; padding: 6px 9px; background: var(--dsw-alias-bg-raised, #f4f5f6); color: inherit; cursor: pointer; }
+.sift-conversation-analysis-status { display: flex; align-items: center; justify-content: space-between; min-height: 30px; padding: 0 8px; border: 1px solid var(--dsw-alias-border-l4, #e5e7eb); border-radius: 7px; color: var(--dsw-alias-label-secondary, #6b7280); background: var(--dsw-alias-bg-raised, #f4f5f6); font-size: 12px; }
+.sift-conversation-analysis-status button { border: 0; border-radius: 5px; padding: 4px 7px; background: transparent; color: var(--dsw-alias-state-error-primary, #e5484d); cursor: pointer; }
+.sift-conversation-analysis-status button:hover { background: color-mix(in srgb, var(--dsw-alias-state-error-primary, #e5484d) 10%, transparent); }
 [data-sift-conversation-content] { display: grid; grid-template-columns: minmax(0, 1fr) 12px; gap: 7px; }
 [data-sift-conversation-nav] { position: sticky; top: 0; align-self: start; display: flex; flex-direction: column; gap: 3px; padding-top: 2px; height: min(70vh, 560px); }
 .sift-conversation-nav-marker { width: 100%; min-height: 7px; flex: 1 1 7px; max-height: 22px; border: 0; border-radius: 2px; background: var(--dsw-alias-border-l4, #e5e7eb); cursor: pointer; }

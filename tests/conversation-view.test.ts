@@ -44,6 +44,33 @@ describe('Conversation view', () => {
     dispose();
   });
 
+  it('分析期间显示耗时并允许取消', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-12T00:00:00Z'));
+    const host = document.createElement('div');
+    const onCancel = vi.fn();
+    const dispose = mountConversationView(
+      host,
+      reference,
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      true,
+      { type: 'group', groupId: 'q-001' },
+      undefined,
+      undefined,
+      Date.now(),
+      onCancel,
+    );
+    expect(host.querySelector('.sift-conversation-analysis-status span')?.textContent).toBe('分析中 · 0 秒');
+    vi.advanceTimersByTime(2_000);
+    expect(host.querySelector('.sift-conversation-analysis-status span')?.textContent).toBe('分析中 · 2 秒');
+    host.querySelector<HTMLButtonElement>('.sift-conversation-analysis-status button')?.click();
+    expect(onCancel).toHaveBeenCalledOnce();
+    dispose();
+    vi.useRealTimers();
+  });
+
   it('点击定位条时自动展开问答并把顶部对齐到可视区域顶部', async () => {
     const host = document.createElement('div');
     const scrollIntoView = vi.fn();

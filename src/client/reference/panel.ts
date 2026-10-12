@@ -31,8 +31,8 @@ export interface ReferenceApi {
   createReference(name?: string): Promise<{ path: string }>;
   importConversationReference(sourcePath: string): Promise<{ path: string }>;
   saveReference(path: string, reference: ReferenceDocument): Promise<void>;
-  analyzeConversation(path: string, anchorGroupId: string): Promise<ReferenceDocument>;
-  analyzeConversationTopic(path: string, topic: string): Promise<ReferenceDocument>;
+  analyzeConversation(path: string, anchorGroupId: string, signal?: AbortSignal): Promise<ReferenceDocument>;
+  analyzeConversationTopic(path: string, topic: string, signal?: AbortSignal): Promise<ReferenceDocument>;
   removeReference(path: string): Promise<void>;
   /** Host 的原生文件对话框（多选）；卡片来源只取第一个路径。 */
   pickSourceFiles(): Promise<{ paths: readonly string[]; cancelled: boolean; message?: string }>;
@@ -64,6 +64,8 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
   let disposeConversationView: (() => void) | undefined;
   let conversationAnalysisRunning = false;
   let conversationAnalysisTarget: { type: 'group'; groupId: string } | { type: 'topic'; topic: string } | undefined;
+  let conversationAnalysisController: AbortController | undefined;
+  let conversationAnalysisStartedAt: number | undefined;
   let conversationTopicDraft = '';
   const cardDocument = (): CardReferenceDocument | null => currentDoc && 'cards' in currentDoc ? currentDoc : null;
   // 当前工作区中"激活"的 Reference 路径；只有这些会出现在 Tab Bar。
@@ -283,6 +285,49 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
 
   // ── 当前参考切换：先 flush，再加载 ────────────────────
 
+  /** 执行一次可取消的会话分析，并在失败时保留当前文档中的旧分析。 */
+  const runConversationAnalysis = async (
+    target: { type: 'group'; groupId: string } | { type: 'topic'; topic: string },
+  ): Promise<void> => {
+    if (!currentPath || conversationAnalysisRunning) return;
+    const path = currentPath;
+    const controller = new AbortController();
+    let timedOut = false;
+    conversationAnalysisRunning = true;
+    conversationAnalysisTarget = target;
+    conversationAnalysisController = controller;
+    conversationAnalysisStartedAt = Date.now();
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 60_000);
+    updateSelectionVisibility();
+    try {
+      const next = target.type === 'group'
+        ? await options.api.analyzeConversation(path, target.groupId, controller.signal)
+        : await options.api.analyzeConversationTopic(path, target.topic, controller.signal);
+      if (conversationAnalysisController === controller && currentPath === path) currentDoc = next;
+    } catch (error) {
+      if (timedOut) {
+        canvasApi.notify('分析已超时（60 秒），已保留上一次结果。');
+      } else if (controller.signal.aborted) {
+        canvasApi.notify('已取消分析，已保留上一次结果。');
+      } else {
+        const message = error instanceof Error ? error.message : target.type === 'group' ? '会话关联分析失败。' : '会话主题分析失败。';
+        canvasApi.notify(`${message} 已保留上一次结果。`);
+      }
+    } finally {
+      clearTimeout(timeout);
+      if (conversationAnalysisController === controller) {
+        conversationAnalysisRunning = false;
+        conversationAnalysisTarget = undefined;
+        conversationAnalysisController = undefined;
+        conversationAnalysisStartedAt = undefined;
+        updateSelectionVisibility();
+      }
+    }
+  };
+
   const updateSelectionVisibility = () => {
     const isConversation = currentDoc !== null && 'kind' in currentDoc && currentDoc.kind === 'conversation';
     canvasHost.hidden = currentDoc === null || isConversation;
@@ -295,54 +340,20 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
         currentDoc = next;
         schedulePersist();
         updateSelectionVisibility();
-      }, async anchorGroupId => {
-        if (!currentPath || conversationAnalysisRunning) return;
-        conversationAnalysisRunning = true;
-        conversationAnalysisTarget = { type: 'group', groupId: anchorGroupId };
-        clearConversationAnalysis();
-        try {
-          currentDoc = await options.api.analyzeConversation(currentPath, anchorGroupId);
-        } catch (error) {
-          canvasApi.notify(error instanceof Error ? error.message : '会话关联分析失败。');
-          throw error;
-        } finally {
-          conversationAnalysisRunning = false;
-          conversationAnalysisTarget = undefined;
-          updateSelectionVisibility();
-        }
-      }, async topic => {
-        if (!currentPath || conversationAnalysisRunning) return;
-        conversationAnalysisRunning = true;
-        conversationAnalysisTarget = { type: 'topic', topic };
-        clearConversationAnalysis();
-        try {
-          currentDoc = await options.api.analyzeConversationTopic(currentPath, topic);
-        } catch (error) {
-          canvasApi.notify(error instanceof Error ? error.message : '会话主题分析失败。');
-          throw error;
-        } finally {
-          conversationAnalysisRunning = false;
-          conversationAnalysisTarget = undefined;
-          updateSelectionVisibility();
-        }
+      }, anchorGroupId => {
+        return runConversationAnalysis({ type: 'group', groupId: anchorGroupId });
+      }, topic => {
+        return runConversationAnalysis({ type: 'topic', topic });
       }, conversationAnalysisRunning, conversationAnalysisTarget, conversationTopicDraft, value => {
         conversationTopicDraft = value;
-      });
+      }, conversationAnalysisStartedAt, () => conversationAnalysisController?.abort());
     } else {
       conversationHost.replaceChildren();
     }
   };
 
-  const clearConversationAnalysis = () => {
-    if (!currentDoc || !('kind' in currentDoc) || currentDoc.kind !== 'conversation') return;
-    if (currentDoc.analysis) {
-      const { analysis: _previousAnalysis, ...withoutAnalysis } = currentDoc;
-      currentDoc = withoutAnalysis;
-    }
-    updateSelectionVisibility();
-  };
-
   const selectReference = async (path: string | null, publishSelection = true): Promise<void> => {
+    conversationAnalysisController?.abort();
     await persistNow();
     currentPath = path;
     if (path === null) {
@@ -501,6 +512,7 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
   // ── 清理：flush → 销毁 ────────────────────────────────
 
   return () => {
+    conversationAnalysisController?.abort();
     document.removeEventListener('keydown', onKeydown);
     document.removeEventListener('paste', onEmptyPaste);
     disposeWorkspace?.();

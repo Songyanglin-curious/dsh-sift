@@ -16,8 +16,11 @@ export function mountConversationView(
   analysisTarget?: { readonly type: 'group'; readonly groupId: string } | { readonly type: 'topic'; readonly topic: string },
   topicDraft?: string,
   onTopicDraftChange?: (value: string) => void,
+  analysisStartedAt?: number,
+  onCancelAnalysis?: () => void,
 ): () => void {
   const markdownDisposers: Array<() => void> = [];
+  let elapsedTimer: ReturnType<typeof setInterval> | undefined;
   const root = document.createElement('div');
   root.dataset.siftConversation = '';
 
@@ -64,6 +67,25 @@ export function mountConversationView(
     });
   });
   root.appendChild(topicBar);
+
+  if (analyzing && analysisStartedAt !== undefined) {
+    const status = document.createElement('div');
+    status.className = 'sift-conversation-analysis-status';
+    status.setAttribute('role', 'status');
+    const elapsed = document.createElement('span');
+    /** 刷新当前分析的可见耗时，避免长推理阶段看起来没有响应。 */
+    const updateElapsed = () => {
+      elapsed.textContent = `分析中 · ${Math.max(0, Math.floor((Date.now() - analysisStartedAt) / 1000))} 秒`;
+    };
+    updateElapsed();
+    elapsedTimer = setInterval(updateElapsed, 1000);
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.textContent = '取消';
+    cancel.addEventListener('click', () => onCancelAnalysis?.());
+    status.append(elapsed, cancel);
+    root.appendChild(status);
+  }
 
   if (reference.warnings.length > 0) {
     const warning = document.createElement('div');
@@ -200,6 +222,7 @@ export function mountConversationView(
   root.appendChild(content);
   host.replaceChildren(root);
   return () => {
+    if (elapsedTimer !== undefined) clearInterval(elapsedTimer);
     markdownDisposers.forEach(dispose => dispose());
     root.remove();
   };

@@ -90,6 +90,7 @@ for (const [method, input, output] of [
   descriptors.push({ id: `${PACKAGE}#sift/${method}`, service: 'sift', namespace: 'sift', method, implementation: method,
     invocation: { kind: 'direct' }, parameters: [{ name: 'input', wire: 'input', source: 'json', codec: { mode: 'strict', typeSymbol: `${PACKAGE}#${method}Request`, create: () => input } }],
     result: { mode: 'strict', typeSymbol: `${PACKAGE}#${method}Result`, create: () => output },
+    ...((method === 'analyzeConversation' || method === 'analyzeConversationTopic') ? { cancellation: { parameter: 'signal' } } : {}),
   });
 }
 

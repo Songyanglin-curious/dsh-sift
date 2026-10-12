@@ -26,7 +26,28 @@ const flush = async () => { await Promise.resolve(); await Promise.resolve(); aw
 function createFixture(initial: Array<{ path: string; name: string; description: string }> = [], workspace?: WorkspaceController) {
   const existing = { path: 'references/existing.json', name: '已有材料', description: '', cards: [] };
   const created = { path: 'references/new.json', name: '文章参考', description: '', cards: [] };
-  const conversation = { path: 'references/talk.json', name: '一次会话', description: '', kind: 'conversation' as const, groups: [], warnings: [], source: { path: 'talk.md', format: 'chatgpt' as const }, collapsedGroupIds: [] };
+  const conversation = {
+    path: 'references/talk.json',
+    name: '一次会话',
+    description: '',
+    kind: 'conversation' as const,
+    source: { type: 'conversation' as const, uri: 'talk.md', format: 'chatgpt-markdown' as const, importedAt: '2026-10-12T00:00:00.000Z' },
+    groups: [{
+      id: 'q-001',
+      user: { content: '旧问题' },
+      assistant: { content: '旧回答', name: 'Assistant' },
+      sourceRange: { startLine: 1, endLine: 2 },
+      collapsed: true,
+      contextDependency: 'standalone' as const,
+    }],
+    warnings: [],
+    analysis: {
+      anchorGroupId: 'q-001',
+      model: { provider: 'tokenhub', model: 'deepseek-v4-flash' },
+      createdAt: '2026-10-12T00:00:00.000Z',
+      items: [{ groupId: 'q-001', relevance: 'strong' as const, continuity: 'none' as const, contextDependency: 'standalone' as const, evidenceGroupIds: [], reason: '旧结果' }],
+    },
+  };
   let listed = [...initial];
   const docs = new Map([[existing.path, existing], [created.path, created], [conversation.path, conversation]]);
   const api = {
@@ -34,7 +55,9 @@ function createFixture(initial: Array<{ path: string; name: string; description:
     loadReference: vi.fn(async (path: string) => docs.get(path)!),
     createReference: vi.fn(async () => { listed = [...listed, created]; return { path: created.path }; }),
     importConversationReference: vi.fn(async () => { listed = [...listed, conversation]; return { path: conversation.path }; }),
-    saveReference: vi.fn(async () => {}), analyzeConversation: vi.fn(), analyzeConversationTopic: vi.fn(),
+    saveReference: vi.fn(async () => {}),
+    analyzeConversation: vi.fn(async () => conversation),
+    analyzeConversationTopic: vi.fn(async () => conversation),
     removeReference: vi.fn(async (path: string) => { listed = listed.filter(item => item.path !== path); }),
     pickSourceFiles: vi.fn(async () => ({ paths: ['talk.md'], cancelled: false })), openSourcePath: vi.fn(async () => {}),
   } satisfies ReferenceApi;
@@ -105,6 +128,51 @@ describe('当前文章参考交互', () => {
     expect(fixture.section.querySelector('[data-sift-ref-edit]')).toBeNull();
     expect(fixture.section.querySelector('[data-sift-ref-delete]')).toBeNull();
     fixture.dispose();
+  });
+
+  it('取消会话分析时中止请求并保留旧分析结果', async () => {
+    const relations = new Map([['article.md', { exists: true, references: ['references/talk.json'] }]]);
+    const workspace = new WorkspaceController({
+      getDocumentRelations: async ({ target }) => relations.get(target)!,
+      setDocumentRelations: async () => {},
+    });
+    await workspace.setActiveOutput('article.md');
+    const fixture = createFixture([{ path: 'references/talk.json', name: '一次会话', description: '' }], workspace);
+    fixture.api.analyzeConversation.mockImplementation((_path, _groupId, signal) => new Promise((_, reject) => {
+      signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+    }));
+    await flush();
+    expect(fixture.section.querySelector('.sift-conversation-analyze')?.textContent).toBe('已分析');
+    fixture.section.querySelector<HTMLButtonElement>('.sift-conversation-analyze')?.click();
+    await flush();
+    expect(fixture.section.querySelector('.sift-conversation-analyze')?.textContent).toBe('分析中…');
+    expect(fixture.section.querySelector('[data-sift-conversation-group="q-001"]')?.getAttribute('data-relevance')).toBe('strong');
+    fixture.section.querySelector<HTMLButtonElement>('.sift-conversation-analysis-status button')?.click();
+    await flush();
+    expect(mocks.canvasNotify).toHaveBeenCalledWith('已取消分析，已保留上一次结果。');
+    expect(fixture.section.querySelector('.sift-conversation-analyze')?.textContent).toBe('已分析');
+    fixture.dispose();
+  });
+
+  it('会话分析超过 60 秒时自动中止并保留旧分析结果', async () => {
+    const relations = new Map([['article.md', { exists: true, references: ['references/talk.json'] }]]);
+    const workspace = new WorkspaceController({
+      getDocumentRelations: async ({ target }) => relations.get(target)!,
+      setDocumentRelations: async () => {},
+    });
+    await workspace.setActiveOutput('article.md');
+    const fixture = createFixture([{ path: 'references/talk.json', name: '一次会话', description: '' }], workspace);
+    fixture.api.analyzeConversation.mockImplementation((_path, _groupId, signal) => new Promise((_, reject) => {
+      signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+    }));
+    await flush();
+    vi.useFakeTimers();
+    fixture.section.querySelector<HTMLButtonElement>('.sift-conversation-analyze')?.click();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(mocks.canvasNotify).toHaveBeenCalledWith('分析已超时（60 秒），已保留上一次结果。');
+    expect(fixture.section.querySelector('.sift-conversation-analyze')?.textContent).toBe('已分析');
+    fixture.dispose();
+    vi.useRealTimers();
   });
 });
 
