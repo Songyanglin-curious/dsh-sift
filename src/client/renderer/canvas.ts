@@ -53,6 +53,8 @@ export interface CanvasOptions {
 export interface CanvasApi {
   /** 外部状态变化（如切换 Reference）后让 Canvas 重读重渲染。 */
   refresh(): void;
+  /** 与 Ctrl+V 共用同一路径，供文章参考栏的显式“粘贴”入口调用。 */
+  addFromClipboard(): void;
   dispose(): void;
   /** 在画布上方短暂显示一条提示（用于展示打开文件失败等原因）。 */
   notify(message: string): void;
@@ -71,17 +73,7 @@ export function mountCanvas(host: HTMLElement, options: CanvasOptions): CanvasAp
   const list = document.createElement('div');
   list.dataset.siftCardList = '';
 
-  // 底部 ＋：备用入口，与 Ctrl+V 走同一处理函数
-  const footer = document.createElement('footer');
-  footer.dataset.siftCanvasFooter = '';
-  const addBtn = document.createElement('button');
-  addBtn.type = 'button';
-  addBtn.dataset.siftCanvasAdd = '';
-  addBtn.title = '读取剪贴板，添加参考';
-  addBtn.textContent = '＋';
-  footer.appendChild(addBtn);
-
-  canvas.append(list, footer);
+  canvas.append(list);
   host.appendChild(canvas);
 
   // 临时提示条：只在需要时出现（如打开文件失败），几秒后自动消失。
@@ -162,11 +154,6 @@ export function mountCanvas(host: HTMLElement, options: CanvasOptions): CanvasAp
     })();
   };
 
-  addBtn.addEventListener('click', () => {
-    addBtn.blur();
-    addReferenceFromClipboard();
-  });
-
   // ── paste 监听（document 级） ────────────────────────
   //
   // 只靠 `:hover` 判断：鼠标在参考区域内且已选中 Reference 就拦截。
@@ -210,6 +197,7 @@ export function mountCanvas(host: HTMLElement, options: CanvasOptions): CanvasAp
 
   return {
     refresh: renderAll,
+    addFromClipboard: addReferenceFromClipboard,
     notify,
     dispose: () => {
       if (noticeTimer !== undefined) clearTimeout(noticeTimer);

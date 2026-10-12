@@ -71,115 +71,35 @@ section > [data-sift-ref-panel] {
 .sift-conversation-turn-label { margin-top: 10px; color: var(--dsw-alias-label-tertiary, #9ca3af); font-size: 11px; font-weight: 600; }
 .sift-conversation-turn-content { color: var(--dsw-alias-label-primary, #111827); font-size: 13px; overflow-wrap: anywhere; }
 
-/* ── Tab Bar ─────────────────────────────────────── */
-
-[data-sift-ref-tabs] {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: var(--dsw-alias-bg-base, #fff);
-  display: flex;
-  align-items: stretch;
-  overflow-x: auto;
-  overflow-y: hidden;
-  flex-wrap: nowrap;
-  height: var(--sift-column-toolbar-height, 76px);
-  min-height: var(--sift-column-toolbar-height, 76px);
-  scrollbar-width: thin;
-  gap: 0;
-  border-bottom: 1px solid var(--dsw-alias-border-l4, #e5e7eb);
-}
-
-.sift-ref-tab {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  height: 100%;
-  padding-left: 10px;
-  padding-right: 0;
-  border-bottom: 2px solid transparent;
-  cursor: pointer;
-  user-select: none;
-}
-
-.sift-ref-tab:hover {
-  background: var(--dsw-alias-bg-raised, #f4f5f6);
-}
-
-.sift-ref-tab[data-active] {
-  border-bottom-color: var(--dsw-alias-brand-primary, #4c8dff);
-}
-
-/* 标签名称（可点击切换） */
-.sift-ref-tab-label {
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  height: 100%;
-  padding: 0 6px;
-  border: none;
-  background: transparent;
-  color: var(--dsw-alias-label-secondary, #6b7280);
-  font: inherit;
-  font-size: 12px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.sift-ref-tab:hover .sift-ref-tab-label,
-.sift-ref-tab[data-active] .sift-ref-tab-label {
-  color: var(--dsw-alias-label-primary, #111827);
-}
-
-/* 关闭按钮：默认隐藏，hover 到 tab 或 tab 活跃时显示。
-   尺寸与按钮盒全部来自 icons.css 的 .sift-icon-button（24×24），这里只控制显隐与 hover 变红。 */
-.sift-ref-tab-close {
-  opacity: 0;
-  visibility: hidden;
-}
-
-.sift-ref-tab:hover .sift-ref-tab-close,
-.sift-ref-tab[data-active] .sift-ref-tab-close {
-  opacity: 1;
-  visibility: visible;
-}
-
-/* 上下文前缀把特异性提到 0-3-0，稳定压过 icons.css 的 .sift-icon-button:hover（0-2-0），
-   不依赖两个 <style> 的注入顺序。 */
-[data-sift-ref-panel] .sift-ref-tab-close:hover {
-  background: var(--dsw-alias-state-error-bg, #fee2e2);
-  color: var(--dsw-alias-state-error-primary, #e5484d);
-}
-
-/* ── Tab Bar 右侧操作区 ──────────────────────────── */
-
-/* 三个操作按钮共用 .sift-icon-button 的 24×24 盒与 16px 图标，这里只负责成组与间距。
-   align-self: center 是必需的：父容器 [data-sift-ref-tabs] 是 align-items: stretch，
-   有确定高度的子项会被贴到 cross-start，按钮会顶到 Tab Bar 上沿。 */
-.sift-ref-tab-actions {
-  display: flex;
-  align-items: center;
-  align-self: center;
-  flex: none;
-  gap: 4px;
-  padding-left: 6px;
-}
-
-[data-sift-ref-panel] [data-sift-ref-delete]:not(:disabled):hover {
-  background: var(--dsw-alias-state-error-bg, #fee2e2);
-  color: var(--dsw-alias-state-error-primary, #e5484d);
-}
+/* ── 当前文章的轻量操作区 ─────────────────────────── */
+[data-sift-article-reference-toolbar] { position:relative; z-index:3; display:flex; align-items:center; gap:6px; min-height:38px; padding:2px 0 8px; border-bottom:1px solid var(--dsw-alias-border-l4,#e5e7eb); }
+[data-sift-reference-toolbar-spacer] { flex:1 1 auto; }
+[data-sift-reference-name] { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--dsw-alias-label-secondary,#6b7280); font-size:12px; }
+[data-sift-reference-switch] { min-width:0; max-width:190px; border:1px solid var(--dsw-alias-border-l3,#d1d5db); border-radius:6px; padding:5px 24px 5px 7px; background:transparent; color:inherit; font-size:12px; }
+[data-sift-reference-add-menu],[data-sift-reference-manage-menu] { position:relative; flex:none; }
+[data-sift-reference-add-menu] > summary,[data-sift-reference-manage-menu] > summary { list-style:none; border:0; border-radius:6px; padding:6px 8px; background:transparent; color:var(--dsw-alias-label-secondary,#6b7280); font-size:12px; cursor:pointer; user-select:none; }
+[data-sift-reference-add-menu] > summary::-webkit-details-marker,[data-sift-reference-manage-menu] > summary::-webkit-details-marker { display:none; }
+[data-sift-reference-add-menu] > summary:hover,[data-sift-reference-manage-menu] > summary:hover { background:var(--dsw-alias-bg-raised,#f4f5f6); color:var(--dsw-alias-label-primary,#111827); }
+[data-sift-reference-menu] { position:absolute; top:calc(100% + 4px); right:0; z-index:5; width:150px; display:grid; gap:2px; padding:5px; border:1px solid var(--dsw-alias-border-l3,#d1d5db); border-radius:8px; background:var(--dsw-alias-bg-base,#fff); box-shadow:0 8px 22px rgb(15 23 42 / 14%); }
+[data-sift-reference-menu] button { border:0; border-radius:5px; padding:7px 8px; background:transparent; color:inherit; text-align:left; font-size:12px; cursor:pointer; }
+[data-sift-reference-menu] button:hover { background:var(--dsw-alias-bg-raised,#f4f5f6); }
+[data-sift-delete-reference]:hover { color:var(--dsw-alias-state-error-primary,#e5484d); }
 
 [data-sift-ref-empty] {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
-  place-items: center;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
   color: var(--dsw-alias-label-tertiary, #9ca3af);
   font-size: 13px;
 }
+[data-sift-ref-empty] strong { color:var(--dsw-alias-label-primary,#111827); font-size:14px; }
+[data-sift-ref-empty] > [data-sift-empty-paste] { margin-top:4px; border:1px solid var(--dsw-alias-brand-primary,#4c8dff); border-radius:7px; padding:7px 12px; background:var(--dsw-alias-brand-primary,#4c8dff); color:#fff; cursor:pointer; }
+[data-sift-reference-empty-links] { display:flex; gap:4px; }
+[data-sift-reference-empty-links] button { border:0; padding:4px 6px; background:transparent; color:var(--dsw-alias-brand-primary,#2563eb); font-size:12px; cursor:pointer; }
 
 [data-sift-ref-empty][hidden] {
   display: none;

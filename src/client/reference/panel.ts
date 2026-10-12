@@ -12,7 +12,6 @@
  */
 
 import panelCss from './panel.css?inline';
-import { setIcon } from '../icons.js';
 import { mountCanvas } from '../renderer/canvas.js';
 import { injectStyle, SIFT_PLUGIN_ID } from '../renderer/inject-style.js';
 import { mountReferenceEditor, triggerEdit } from './reference-edit.js';
@@ -73,246 +72,129 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
     ? [...options.workspace.snapshot().visibleReferences]
     : [...freeReferenceTabs];
 
-  // ── Tab Bar ────────────────────────────────────────
+  // ── 文章参考工具栏 ──────────────────────────────────
 
-  const tabBar = document.createElement('div');
-  tabBar.dataset.siftRefTabs = '';
-  let addRefBtn: HTMLButtonElement | undefined;
+  const toolbar = document.createElement('div');
+  toolbar.dataset.siftArticleReferenceToolbar = '';
 
-  // ── 添加参考（弹窗）由 ref-selector.tsx 提供 ───────
+  const addExisting = () => {
+    triggerRefSelector({
+      all: summaries,
+      checked: visiblePaths(),
+      onSave: async selected => {
+        const additions = selected.filter(path => !visiblePaths().includes(path));
+        if (options.workspace) await options.workspace.addReferences(additions);
+        else freeReferenceTabs = [...new Set([...freeReferenceTabs, ...additions])];
+        const next = additions.at(-1) ?? selected.at(-1);
+        if (next) await selectReference(next);
+        renderToolbar();
+      },
+    });
+  };
 
-  const renderTabs = () => {
-    tabBar.replaceChildren();
+  const importConversation = () => {
+    void (async () => {
+      const selected = await options.api.pickSourceFiles();
+      const sourcePath = selected.paths[0];
+      if (!sourcePath) return;
+      try {
+        const { path } = await options.api.importConversationReference(sourcePath);
+        await refreshSummaries();
+        await options.workspace?.addReferences([path]);
+        if (!options.workspace) freeReferenceTabs = [...new Set([...freeReferenceTabs, path])];
+        await selectReference(path);
+      } catch (error) {
+        console.error('Sift: 导入会话失败', error);
+        canvasApi.notify(error instanceof Error ? error.message : '导入会话失败。');
+      }
+    })();
+  };
 
-    // 只显示 freeReferenceTabs 内的 reference
-    const paths = visiblePaths();
-    const visible = summaries.filter(s => paths.includes(s.path));
-    for (const summary of visible) {
-      const tab = document.createElement('div');
-      tab.className = 'sift-ref-tab';
-      if (summary.path === currentPath) tab.dataset.active = '';
-
-      const label = document.createElement('button');
-      label.type = 'button';
-      label.className = 'sift-ref-tab-label';
-      label.title = summary.name;
-      label.textContent = summary.name;
-      label.addEventListener('click', () => {
-        if (summary.path !== currentPath) void selectReference(summary.path);
-      });
-      tab.appendChild(label);
-
-      // 关闭只存在于自由模式；有关联 Output 时必须通过“编辑关联”明确修改。
-      // 图标几何来自 icons.ts、按钮盒来自 icons.css 的 .sift-icon-button，
-      // 这里只保留显隐与 hover 变红；样式一律走类名，data-* 仅作调试锚点。
-      const closeBtn = document.createElement('button');
-      closeBtn.type = 'button';
-      closeBtn.className = 'sift-icon-button sift-ref-tab-close';
-      closeBtn.title = '关闭';
-      closeBtn.setAttribute('aria-label', '关闭');
-      setIcon(closeBtn, 'close');
-      closeBtn.addEventListener('click', (event) => {
-        event.stopPropagation();
-        if (options.workspace) {
-          options.workspace.closeFreeReference(summary.path);
-          return;
-        }
-        const idx = freeReferenceTabs.indexOf(summary.path);
-        if (idx === -1) return;
-        freeReferenceTabs.splice(idx, 1);
-        if (currentPath === summary.path) {
-          // 关闭的是当前活跃 tab → 切到第一个剩下的（如有）
-          if (freeReferenceTabs.length > 0) {
-            void selectReference(freeReferenceTabs[0]!);
-          } else {
-            currentPath = null;
-            currentDoc = null;
-            updateSelectionVisibility();
-            canvasApi.refresh();
-            renderTabs();
-          }
-        } else {
-          renderTabs();
-        }
-      });
-      tab.appendChild(closeBtn);
-      closeBtn.hidden = options.workspace?.snapshot().activeOutput !== undefined;
-
-      tabBar.appendChild(tab);
+  const pasteIntoArticle = async () => {
+    if (!cardDocument()) {
+      try {
+        const { path } = await options.api.createReference();
+        await refreshSummaries();
+        await options.workspace?.addReferences([path]);
+        if (!options.workspace) freeReferenceTabs = [...new Set([...freeReferenceTabs, path])];
+        await selectReference(path);
+      } catch (error) {
+        canvasApi.notify(error instanceof Error ? error.message : '创建文章参考失败。');
+        return;
+      }
     }
+    canvasApi.addFromClipboard();
+  };
 
-    // spacer —— 把操作按钮推到右侧
-    const spacer = document.createElement('span');
-    spacer.style.cssText = 'flex:1;min-width:8px';
-    tabBar.appendChild(spacer);
-
-    // 右侧操作区：统一用 .sift-icon-button（24×24 盒 + 16px 图标），间距由容器 gap 给出
-    const actions = document.createElement('div');
-    actions.className = 'sift-ref-tab-actions';
-
-    // 添加参考（选择已有）：列表 + 加号，与下方"新建参考"的纯加号在形状上可区分
-    addRefBtn = document.createElement('button');
-    addRefBtn.type = 'button';
-    addRefBtn.className = 'sift-icon-button';
-    addRefBtn.dataset.siftRefAddRef = '';
-    addRefBtn.title = '添加已有参考';
-    addRefBtn.setAttribute('aria-label', '添加已有参考');
-    setIcon(addRefBtn, 'list-plus');
-    addRefBtn.tabIndex = 0;
-    addRefBtn.addEventListener('click', () => {
-      addRefBtn!.blur();
-      triggerRefSelector({
-        all: summaries,
-        checked: [],
-        onSave: async (selected) => {
-          if (options.workspace) {
-            await options.workspace.addReferences(selected);
-            return;
-          }
-          freeReferenceTabs = [...new Set([...freeReferenceTabs, ...selected])];
-          // 如果当前 path 不在选中列表，切到第一个选中的或无
-          if (currentPath && !freeReferenceTabs.includes(currentPath)) {
-            if (freeReferenceTabs.length > 0) {
-              void selectReference(freeReferenceTabs[0]!);
-            } else {
-              currentPath = null;
-              currentDoc = null;
-              updateSelectionVisibility();
-              canvasApi.refresh();
-            }
-          }
-          renderTabs();
-        },
-      });
+  const editCurrent = () => {
+    if (!currentDoc) return;
+    triggerEdit(currentDoc.name, currentDoc.description, async (name, description) => {
+      if (!currentDoc || !currentPath) return;
+      currentDoc = { ...currentDoc, name, description };
+      const summary = summaries.find(item => item.path === currentPath);
+      if (summary) summary.name = name;
+      schedulePersist(); renderToolbar();
     });
-    actions.appendChild(addRefBtn);
+  };
 
-    const importConversationBtn = document.createElement('button');
-    importConversationBtn.type = 'button';
-    importConversationBtn.className = 'sift-icon-button';
-    importConversationBtn.dataset.siftConversationImport = '';
-    importConversationBtn.title = '导入会话参考';
-    importConversationBtn.setAttribute('aria-label', '导入会话参考');
-    setIcon(importConversationBtn, 'file');
-    importConversationBtn.addEventListener('click', () => {
-      void (async () => {
-        const selected = await options.api.pickSourceFiles();
-        const sourcePath = selected.paths[0];
-        if (!sourcePath) return;
-        try {
-          const { path } = await options.api.importConversationReference(sourcePath);
-          await refreshSummaries();
-          await options.workspace?.addReferences([path]);
-          if (!options.workspace) freeReferenceTabs = [...new Set([...freeReferenceTabs, path])];
-          await selectReference(path);
-        } catch (error) {
-          console.error('Sift: 导入会话失败', error);
-          canvasApi.notify(error instanceof Error ? error.message : '导入会话失败。');
-        }
-      })();
-    });
-    actions.appendChild(importConversationBtn);
+  const deleteCurrent = () => {
+    if (!currentDoc || !currentPath || deleting) return;
+    const path = currentPath; const name = currentDoc.name;
+    const confirmed = options.confirmDelete?.(name)
+      ?? window.confirm(`删除参考“${name}”？\n\n这会永久删除该参考及其中的全部内容，并从相关文章中移除。此操作无法撤销。`);
+    if (!confirmed) return;
+    void (async () => {
+      deleting = true; renderToolbar();
+      try {
+        await persistNow(); await options.api.removeReference(path);
+        freeReferenceTabs = freeReferenceTabs.filter(item => item !== path);
+        summaries = summaries.filter(item => item.path !== path);
+        options.workspace?.forgetReference(path);
+        currentPath = null; currentDoc = null; history.reset([]);
+        const next = options.workspace?.snapshot().activeReference ?? visiblePaths()[0];
+        if (next) await selectReference(next); else { updateSelectionVisibility(); canvasApi.refresh(); }
+      } catch (error) {
+        canvasApi.notify(error instanceof Error ? error.message : '删除参考失败。');
+      } finally { deleting = false; renderToolbar(); }
+    })();
+  };
 
-    // 编辑当前参考
-    const editBtn = document.createElement('button');
-    editBtn.type = 'button';
-    editBtn.className = 'sift-icon-button';
-    editBtn.dataset.siftRefEdit = '';
-    editBtn.title = '编辑参考名称与描述';
-    editBtn.setAttribute('aria-label', '编辑参考名称与描述');
-    setIcon(editBtn, 'pencil');
-    editBtn.addEventListener('click', () => {
-      editBtn.blur();
-      if (!currentDoc) return;
-      triggerEdit(currentDoc.name, currentDoc.description, async (name, description) => {
-        if (!currentDoc || !currentPath) return;
-        currentDoc = { ...currentDoc, name, description };
-        const summary = summaries.find(s => s.path === currentPath);
-        if (summary) summary.name = name;
-        schedulePersist();
-        renderTabs();
-      });
-    });
-    actions.appendChild(editBtn);
+  const menuButton = (label: string, action: () => void, dataName?: string) => {
+    const button = document.createElement('button'); button.type = 'button'; button.textContent = label;
+    if (dataName) button.dataset[dataName] = '';
+    button.addEventListener('click', action); return button;
+  };
 
-    // 删除当前参考：与编辑、关闭 Tab 分离，确认后才删除物理文件。
-    const deleteBtn = document.createElement('button');
-    deleteBtn.type = 'button';
-    deleteBtn.className = 'sift-icon-button';
-    deleteBtn.dataset.siftRefDelete = '';
-    deleteBtn.title = '删除当前参考';
-    deleteBtn.setAttribute('aria-label', '删除当前参考');
-    deleteBtn.disabled = currentDoc === null || currentPath === null || deleting;
-    setIcon(deleteBtn, 'trash');
-    deleteBtn.addEventListener('click', () => {
-      deleteBtn.blur();
-      if (!currentDoc || !currentPath || deleting) return;
-      const path = currentPath;
-      const name = currentDoc.name;
-      const confirmed = options.confirmDelete?.(name)
-        ?? window.confirm(`删除参考“${name}”？\n\n这会永久删除该参考及其中的全部内容，并从相关产出的关联中移除。此操作无法撤销。`);
-      if (!confirmed) return;
-      void (async () => {
-        deleting = true;
-        renderTabs();
-        try {
-          // 先结束挂起的保存，避免删除成功后被防抖写入重新创建。
-          await persistNow();
-          await options.api.removeReference(path);
-          const removedIndex = freeReferenceTabs.indexOf(path);
-          freeReferenceTabs = freeReferenceTabs.filter(item => item !== path);
-          summaries = summaries.filter(item => item.path !== path);
-          options.workspace?.forgetReference(path);
-          if (currentPath === path) {
-            currentPath = null;
-            currentDoc = null;
-            history.reset([]);
-            const workspaceNext = options.workspace?.snapshot().activeReference;
-            const nextIndex = Math.min(Math.max(removedIndex, 0), freeReferenceTabs.length - 1);
-            const nextPath = workspaceNext ?? (nextIndex >= 0 ? freeReferenceTabs[nextIndex] : undefined);
-            if (nextPath) {
-              await selectReference(nextPath);
-            } else {
-              updateSelectionVisibility();
-              canvasApi.refresh();
-            }
-          }
-        } catch (error) {
-          console.error('Sift: 删除参考失败', error);
-          canvasApi.notify(error instanceof Error ? error.message : '删除参考失败。');
-        } finally {
-          deleting = false;
-          renderTabs();
-        }
-      })();
-    });
-    actions.appendChild(deleteBtn);
-
-    // 新建参考
-    const addBtn = document.createElement('button');
-    addBtn.type = 'button';
-    addBtn.className = 'sift-icon-button';
-    addBtn.dataset.siftRefAdd = '';
-    addBtn.title = '新建参考';
-    addBtn.setAttribute('aria-label', '新建参考');
-    setIcon(addBtn, 'plus');
-    addBtn.addEventListener('click', () => {
-      addBtn.blur();
-      void (async () => {
-        try {
-          const { path } = await options.api.createReference();
-          await refreshSummaries();
-          await options.workspace?.addReferences([path]);
-          renderTabs();
-          await selectReference(path);
-        } catch (error) {
-          console.error('Sift: 新建参考失败', error);
-        }
-      })();
-    });
-    actions.appendChild(addBtn);
-
-    tabBar.appendChild(actions);
+  const renderToolbar = () => {
+    toolbar.replaceChildren();
+    const visible = summaries.filter(item => visiblePaths().includes(item.path));
+    if (visible.length > 1) {
+      const select = document.createElement('select'); select.dataset.siftReferenceSwitch = ''; select.setAttribute('aria-label', '当前参考内容');
+      for (const summary of visible) {
+        const option = document.createElement('option'); option.value = summary.path; option.textContent = summary.name; option.selected = summary.path === currentPath; select.appendChild(option);
+      }
+      select.addEventListener('change', () => { void selectReference(select.value); }); toolbar.appendChild(select);
+    } else if (visible.length === 1 && currentDoc) {
+      const name = document.createElement('span'); name.dataset.siftReferenceName = ''; name.textContent = currentDoc.name; toolbar.appendChild(name);
+    }
+    const spacer = document.createElement('span'); spacer.dataset.siftReferenceToolbarSpacer = ''; toolbar.appendChild(spacer);
+    const add = document.createElement('details'); add.dataset.siftReferenceAddMenu = '';
+    const addSummary = document.createElement('summary'); addSummary.textContent = '＋ 添加参考'; add.appendChild(addSummary);
+    const addItems = document.createElement('div'); addItems.dataset.siftReferenceMenu = '';
+    addItems.append(menuButton('粘贴剪贴板内容', () => { add.open = false; void pasteIntoArticle(); }, 'siftPasteReference'));
+    addItems.append(menuButton('添加已有材料', () => { add.open = false; addExisting(); }, 'siftAddExisting'));
+    addItems.append(menuButton('导入会话', () => { add.open = false; importConversation(); }, 'siftImportConversation'));
+    add.appendChild(addItems); toolbar.appendChild(add);
+    if (currentDoc) {
+      const manage = document.createElement('details'); manage.dataset.siftReferenceManageMenu = '';
+      const manageSummary = document.createElement('summary'); manageSummary.textContent = '⋯'; manageSummary.setAttribute('aria-label', '管理当前参考'); manage.appendChild(manageSummary);
+      const manageItems = document.createElement('div'); manageItems.dataset.siftReferenceMenu = '';
+      manageItems.append(menuButton('重命名', () => { manage.open = false; editCurrent(); }, 'siftRenameReference'));
+      const deleteButton = menuButton('删除', () => { manage.open = false; deleteCurrent(); }, 'siftDeleteReference');
+      deleteButton.dataset.siftDeleteReference = '';
+      manageItems.append(deleteButton);
+      manage.appendChild(manageItems); toolbar.appendChild(manage);
+    }
   };
 
   // ── DOM ───────────────────────────────────────────────
@@ -333,7 +215,13 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
 
   const emptyState = document.createElement('div');
   emptyState.dataset.siftRefEmpty = '';
-  emptyState.textContent = '暂无打开的参考';
+  const emptyTitle = document.createElement('strong'); emptyTitle.textContent = '暂无参考';
+  const emptyHint = document.createElement('span'); emptyHint.textContent = '粘贴内容，或从已有材料和会话开始';
+  const emptyPrimary = menuButton('粘贴剪贴板内容', () => { void pasteIntoArticle(); }, 'siftEmptyPaste');
+  emptyPrimary.dataset.siftEmptyPaste = '';
+  const emptyLinks = document.createElement('div'); emptyLinks.dataset.siftReferenceEmptyLinks = '';
+  emptyLinks.append(menuButton('添加已有材料', addExisting, 'siftEmptyExisting'), menuButton('导入会话', importConversation, 'siftEmptyConversation'));
+  emptyState.append(emptyTitle, emptyHint, emptyPrimary, emptyLinks);
 
   // ── 落盘：内存改完 → 防抖 → 写当前文件 ────────────────
 
@@ -482,7 +370,7 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
       delete panel.dataset.annotationTitle;
     }
     canvasApi.refresh();
-    renderTabs();
+    renderToolbar();
     if (publishSelection) options.workspace?.setActiveReference(currentPath ?? undefined);
   };
 
@@ -522,7 +410,7 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
 
   // mountCanvas 成功后把 DOM 挂进 section；
   // 之前任何抛错都保持 section 干净，由调用方回落，避免拖垮三栏布局。
-  panel.append(tabBar, canvasHost, conversationHost, emptyState);
+  panel.append(toolbar, canvasHost, conversationHost, emptyState);
   section.append(panel);
   updateSelectionVisibility();
 
@@ -568,6 +456,11 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
     }
   };
   document.addEventListener('keydown', onKeydown);
+  const onEmptyPaste = (event: ClipboardEvent) => {
+    if (currentDoc || !panel.matches(':hover')) return;
+    event.preventDefault(); void pasteIntoArticle();
+  };
+  document.addEventListener('paste', onEmptyPaste);
 
   const refreshSummaries = async (): Promise<void> => {
     try {
@@ -594,7 +487,7 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
   const initialize = async (): Promise<void> => {
     await refreshSummaries();
     syncWorkspaceSelection();
-    renderTabs();
+    renderToolbar();
   };
 
   // ── 启动 ──────────────────────────────────────────────
@@ -602,13 +495,14 @@ export function mountReferencePanel(section: HTMLElement, options: ReferencePane
   void initialize();
   const disposeWorkspace = options.workspace?.subscribe(() => {
     syncWorkspaceSelection();
-    renderTabs();
+    renderToolbar();
   });
 
   // ── 清理：flush → 销毁 ────────────────────────────────
 
   return () => {
     document.removeEventListener('keydown', onKeydown);
+    document.removeEventListener('paste', onEmptyPaste);
     disposeWorkspace?.();
     disposeConversationView?.();
     void persistNow(); // 尽力而为：dispose 前把挂起的修改写掉

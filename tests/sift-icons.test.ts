@@ -132,7 +132,6 @@ describe('样式钩子与 DOM 属性一致（防 data-* 命名漂移）', () => 
 
   it('panel.ts 里每个 setIcon 的宿主按钮都带 .sift-icon-button', () => {
     const hosts = [...PANEL_TS.matchAll(/setIcon\((\w+),/g)].map(match => match[1]!);
-    expect(hosts.length).toBeGreaterThanOrEqual(4);
     for (const name of hosts) {
       const assignment = new RegExp(`${name}\\.className\\s*=\\s*'([^']*)'`).exec(PANEL_TS);
       expect(assignment?.[1], `${name} 应带 .sift-icon-button`).toContain('sift-icon-button');

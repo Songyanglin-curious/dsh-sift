@@ -24,32 +24,6 @@
   word-break: break-all;
 }
 
-/* ── Footer：＋ 备用入口（右下角） ───────────────── */
-
-[data-sift-canvas-footer] {
-  display: flex;
-  justify-content: flex-end;
-}
-
-[data-sift-canvas-add] {
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--dsw-alias-label-tertiary, #8b919a);
-  font: inherit;
-  font-size: 15px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-[data-sift-canvas-add]:hover {
-  background: var(--dsw-alias-bg-raised, #f4f5f6);
-  color: var(--dsw-alias-label-primary, #111827);
-}
-
 /* ── 卡片列表 ───────────────────────────────────── */
 
 [data-sift-card-list] {
