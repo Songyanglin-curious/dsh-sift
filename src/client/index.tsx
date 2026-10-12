@@ -37,10 +37,13 @@ interface ClientContext {
   effect?(factory: () => () => void | Promise<void>, label?: string): unknown;
 }
 
-interface ArticleActionProps { readonly absolutePath: string; readonly openSiftReferences: (absolutePath: string) => void }
+interface ArticleActionProps { readonly absolutePath: string; readonly openSiftReferences: (absolutePath: string, previewElement: HTMLElement) => void }
 
 function ArticleReferenceAction({ absolutePath, openSiftReferences }: ArticleActionProps) {
-  return <button type="button" data-sift-article-action="" title="当前文章的参考" aria-label="打开当前文章的参考" onClick={() => openSiftReferences(absolutePath)}>
+  return <button type="button" data-sift-article-action="" title="当前文章的参考" aria-label="打开当前文章的参考" onClick={event => {
+    const previewElement = event.currentTarget.closest('[data-textpreview-url]') as HTMLElement | null;
+    if (previewElement) openSiftReferences(absolutePath, previewElement);
+  }}>
     <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h4.2A1.8 1.8 0 0 1 8 4v9a1.8 1.8 0 0 0-1.3-.5H2.5zM13.5 3.5H9.3A1.8 1.8 0 0 0 8 4v9a1.8 1.8 0 0 1 1.3-.5h4.2z" /></svg>
   </button>;
 }
@@ -76,7 +79,7 @@ export function apply(ctx: ClientContext): void {
   ctx.slots.inject('sidebar.right.tab.document.actions', () => ctx.slots.register({
     name: 'sidebar.right.tab.document.actions', id: 'sift-reference', order: -100,
     inject: sessionId => ({
-      openSiftReferences: (absolutePath: string) => {
+      openSiftReferences: (absolutePath: string, previewElement: HTMLElement) => {
         const workspace = resolveCurrentWorkspace(ctx.workspaces?.list.getSnapshot(), sessionId);
         if (!workspace) return;
         const key = `${workspace.workspaceId}:${absolutePath}`;
@@ -84,7 +87,7 @@ export function apply(ctx: ClientContext): void {
         closeDrawer(); drawerKey = key;
         const workspaceId = workspace.workspaceId;
         disposeDrawer = mountArticleReferenceDrawer({
-          workspaceId, absolutePath, onClose: closeDrawer,
+          workspaceId, absolutePath, previewElement, onClose: closeDrawer,
           readClipboard: () => call('readClipboard', {}),
           api: {
             listReferences: () => call('listReferences', { workspaceId }),

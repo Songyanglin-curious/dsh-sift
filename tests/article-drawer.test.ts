@@ -13,18 +13,23 @@ function api() {
   };
 }
 
-describe('当前文章参考抽屉', () => {
+describe('当前文章并排参考栏', () => {
   it('以当前文件路径读取关系，不创建 Sift 工作区或 Document', async () => {
     const service = api(); const onClose = vi.fn();
-    const dispose = mountArticleReferenceDrawer({ workspaceId: 'ws-1', absolutePath: 'D:\\notes\\article.md', api: service as never, readClipboard: vi.fn(), onClose });
+    const splitHost = document.createElement('main');
+    const previewElement = document.createElement('section'); splitHost.appendChild(previewElement); document.body.appendChild(splitHost);
+    const dispose = mountArticleReferenceDrawer({ workspaceId: 'ws-1', absolutePath: 'D:\\notes\\article.md', previewElement, api: service as never, readClipboard: vi.fn(), onClose });
     await Promise.resolve(); await Promise.resolve();
     expect(service.getDocumentRelations).toHaveBeenCalledWith({ target: 'D:\\notes\\article.md' });
     expect(service.listReferences).toHaveBeenCalledOnce();
     expect(document.querySelector('[data-sift-article-drawer-title]')?.textContent).toContain('参考 · article.md');
     expect(document.querySelector('[data-sift-article-drawer-subtitle]')?.textContent).toBe('仅关联当前文章');
+    expect(Array.from(splitHost.children)).toEqual([previewElement, document.querySelector('[data-sift-article-drawer]')]);
+    expect(splitHost.dataset.siftArticleSplit).toBe('');
     (document.querySelector('[data-sift-article-drawer-close]') as HTMLButtonElement).click();
     expect(onClose).toHaveBeenCalledOnce();
     dispose();
+    expect(splitHost.dataset.siftArticleSplit).toBeUndefined();
   });
 
   it('把参考图标放到原生 Markdown 菜单之前', async () => {
